@@ -6,6 +6,38 @@ All notable changes to this project are documented here. The project follows
 
 ## [Unreleased]
 
+### Added — Milestone 8: Reliability and operations
+
+- Queue worker: jobs are claimed with `FOR UPDATE SKIP LOCKED`, retried with backoff (timeouts, provider
+  errors, deadlocks), and moved to the dead letters when they can't succeed. Jobs abandoned by a crashed
+  worker go back to the queue. Timestamps come from the database clock.
+- Scheduled tasks: daily (Vercel Cron) review reminders, metrics rollup, cleanup of abandoned uploads and old
+  records, queue and alert check; every 30 minutes (GitHub Actions) queue and alert check. Each run takes a
+  lease so runs never overlap, and is recorded.
+- Email reliability: a circuit breaker pauses sending while Resend is failing (jobs wait without using up
+  attempts); bounced and complaining addresses are suppressed via signed, idempotent Resend webhooks.
+- Alerts emailed to `ALERT_EMAIL` at most once a day each: dependency down, error spike, failed jobs, stuck
+  queue, provider paused, stale schedules, missing backups, certificate expiry.
+- Admin → Operations (Super Admin): health, queue, scheduled-task history with “Run now”, failed jobs with
+  retry and discard, email delivery and suppressions, configuration check.
+- Admin → Audit Log (Super Admin): filterable record of publishing, unpublishing, deletions, role changes,
+  file replacements and failed-job decisions.
+- Live notices for editors (Supabase Realtime): new submissions, revisions, reviews and messages appear as
+  they happen.
+- Weekly backups (GitHub Actions): database dump with the list of stored files, plus every stored file
+  monthly, copied to the journal's Google Drive and kept as workflow artifacts; restore scripts; a restore
+  drill passed.
+- Public read-only JSON API at `/api/v1` (issues, articles with citations, categories), CORS-enabled and
+  CDN-cached.
+- Friendly error pages for the public site and the admin, with a reference that matches the server log.
+- Tracing spans for queue jobs and scheduled tasks; server errors counted for the error-rate alert.
+- Docs: `docs/RUNBOOK.md`, `docs/POSTMORTEM_TEMPLATE.md`; `docs/ENGINEERING.md` now covers all 111 items,
+  with SLOs, SLIs, the error budget, the observability summary, measured latency and throughput, failover and
+  expected costs.
+- Database: migration 10 (with rollback); pgTAP tests for the worker, leases, circuit breaker and event
+  visibility; unit tests for alert rules, webhook signatures and simulated email and storage failures;
+  end-to-end tests for cron, dead letters, webhooks, backup reports, live notices and the API.
+
 ### Added — Milestone 7: Downloads, analytics and SEO
 
 - Download routes `/api/download/article/[id]` and `/api/download/issue/[id]` (`?format=pdf|docx`): check

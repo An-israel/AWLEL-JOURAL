@@ -2,6 +2,7 @@ import "server-only";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { siteUrl } from "@/lib/env.public";
+import { countServerError } from "./error-rate";
 import { ApiError, badRequest, forbidden, tooManyRequests } from "./errors";
 import { logger as rootLogger } from "./logger";
 import { checkRateLimit, clientIp, type RateLimitRule } from "./rate-limit";
@@ -112,6 +113,7 @@ export function apiRoute<Q extends z.ZodType = z.ZodUndefined, B extends z.ZodTy
         response = errorResponse(error, requestId);
       } else {
         log.error({ err: error }, "unhandled error in route handler");
+        await countServerError();
         response = errorResponse(new ApiError(500, "internal_error", "Something went wrong"), requestId);
       }
     }

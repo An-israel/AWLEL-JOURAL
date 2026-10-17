@@ -108,3 +108,28 @@ export async function notifyRevisionUploaded(s: { id: string; title: string; fil
     `revision:${s.fileId}`,
   );
 }
+
+/** Daily cron: a pending review is due within three days or overdue. */
+export async function notifyReviewReminder(r: {
+  assignmentId: string;
+  reviewerEmail: string;
+  reviewerName: string;
+  title: string;
+  dueDate: string;
+  today: string;
+}) {
+  const due = new Date(r.dueDate).toLocaleDateString("en-GB", { dateStyle: "long", timeZone: "UTC" });
+  const overdue = r.dueDate < r.today;
+  await send(
+    r.reviewerEmail,
+    overdue ? `Review overdue: ${r.title}` : `Review reminder: ${r.title}`,
+    `Dear ${r.reviewerName || "colleague"},\n\n${
+      overdue
+        ? `Your review of “${r.title}” was due on ${due}.`
+        : `A gentle reminder that your review of “${r.title}” is due on ${due}.`
+    } If you need more time, simply reply to this email and let the editors know.\n\nOpen the manuscript and review form:\n${siteUrl}/admin/reviews/${r.assignmentId}`,
+    // One reminder per review per day at most, even if the cron runs twice.
+    `review-reminder:${r.assignmentId}:${r.today}`,
+    serverEnv().EDITORIAL_EMAIL,
+  );
+}

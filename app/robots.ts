@@ -10,8 +10,9 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: "*",
-        // Article PDFs are linked from citation_pdf_url, so Google Scholar must reach them.
-        allow: ["/", "/api/download/"],
+        // Article PDFs are linked from citation_pdf_url, so Google Scholar must reach them;
+        // the public API is for indexers.
+        allow: ["/", "/api/download/", "/api/v1/"],
         disallow: ["/admin", "/account", "/api/", "/login", "/submit"],
       },
     ],

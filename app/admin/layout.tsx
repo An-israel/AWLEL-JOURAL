@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { LiveNotices } from "@/components/admin/live-notices";
 import { AdminSidebar } from "@/components/admin/sidebar";
 import { SkipLink } from "@/components/site/skip-link";
 import { Toaster } from "@/components/ui/toaster";
 import { navFor } from "@/lib/admin-nav";
 import { requireRole } from "@/lib/auth";
-import { ADMIN_AREA_ROLES, ROLE_LABELS } from "@/lib/roles";
+import { ADMIN_AREA_ROLES, isStaff, ROLE_LABELS } from "@/lib/roles";
 
 export const metadata: Metadata = {
   title: { default: "Admin", template: "%s | AWLEL Admin" },
@@ -23,6 +24,7 @@ async function Shell({ children }: { children: React.ReactNode }) {
       </main>
       {/* Inside the dynamic boundary: sonner reads the clock while rendering. */}
       <Toaster />
+      {isStaff(user.role) ? <LiveNotices /> : null}
     </div>
   );
 }

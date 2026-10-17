@@ -26,6 +26,11 @@ export async function register() {
 }
 
 export const onRequestError: Instrumentation.onRequestError = async (...args) => {
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    // Feeds the error-rate alert (items 61, 62).
+    const { countServerError } = await import("@/lib/server/error-rate");
+    await countServerError();
+  }
   if (!process.env.SENTRY_DSN) return;
   const Sentry = await import("@sentry/nextjs");
   Sentry.captureRequestError(...args);

@@ -1,0 +1,39 @@
+# Runs the queue worker every 30 minutes (item 21): retries emails that
+# failed, sends queued work and checks the alert rules. Vercel's free plan
+# only allows daily cron jobs, so the frequent schedule lives here; the daily
+# tasks run from vercel.json. Every 30 minutes uses about 1,450 Actions
+# minutes a month (each run is billed as a full minute), inside the 2,000 free
+# minutes of a private repository. GitHub may delay scheduled runs at busy times.
+# Repository secrets (Settings → Secrets and variables → Actions):
+#   SITE_URL     https://your-domain (no trailing slash)
+#   CRON_SECRET  the same value as in Vercel
+name: Scheduled tasks
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: scheduled-queue
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  queue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Run the queue worker
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$SITE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::notice::SITE_URL or CRON_SECRET is not set; skipping."
+            exit 0
+          fi
+          curl --fail-with-body --silent --show-error --max-time 90 \
+            -H "Authorization: Bearer $CRON_SECRET" "$SITE_URL/api/cron/queue"

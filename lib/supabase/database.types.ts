@@ -288,6 +288,28 @@ export type Database = {
         };
         Relationships: [];
       };
+      circuit_breakers: {
+        Row: {
+          failures: number;
+          name: string;
+          opened_until: string | null;
+          updated_at: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          failures?: number;
+          name: string;
+          opened_until?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          failures?: number;
+          name?: string;
+          opened_until?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       contact_messages: {
         Row: {
           created_at: string;
@@ -319,6 +341,56 @@ export type Database = {
           message?: string;
           name?: string;
           subject?: string;
+        };
+        Relationships: [];
+      };
+      cron_leases: {
+        Row: {
+          holder: string;
+          locked_until: string;
+          name: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          holder: string;
+          locked_until: string;
+          name: string;
+        };
+        Update: {
+          holder?: string;
+          locked_until?: string;
+          name?: string;
+        };
+        Relationships: [];
+      };
+      cron_runs: {
+        Row: {
+          detail: NonNullable<Json>;
+          error: string | null;
+          finished_at: string | null;
+          id: number;
+          started_at: string;
+          status: string;
+          task: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          detail?: NonNullable<Json>;
+          error?: string | null;
+          finished_at?: string | null;
+          id?: never;
+          started_at?: string;
+          status: string;
+          task: string;
+        };
+        Update: {
+          detail?: NonNullable<Json>;
+          error?: string | null;
+          finished_at?: string | null;
+          id?: never;
+          started_at?: string;
+          status?: string;
+          task?: string;
         };
         Relationships: [];
       };
@@ -526,6 +598,41 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      email_suppressions: {
+        Row: {
+          created_at: string;
+          email: string;
+          reason: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          email: string;
+          reason: string;
+        };
+        Update: {
+          created_at?: string;
+          email?: string;
+          reason?: string;
+        };
+        Relationships: [];
+      };
+      error_counts: {
+        Row: {
+          errors: number;
+          minute: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          errors?: number;
+          minute: string;
+        };
+        Update: {
+          errors?: number;
+          minute?: string;
+        };
+        Relationships: [];
       };
       feature_flags: {
         Row: {
@@ -1387,6 +1494,28 @@ export type Database = {
         };
         Relationships: [];
       };
+      webhook_events: {
+        Row: {
+          event_type: string;
+          id: string;
+          received_at: string;
+          source: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          event_type: string;
+          id: string;
+          received_at?: string;
+          source: string;
+        };
+        Update: {
+          event_type?: string;
+          id?: string;
+          received_at?: string;
+          source?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       public_article_authors: {
@@ -1438,6 +1567,11 @@ export type Database = {
         Returns: undefined;
       };
       article_search_document: { Args: { p_article_id: string }; Returns: unknown };
+      breaker_allows: { Args: { p_name: string }; Returns: boolean };
+      breaker_record: {
+        Args: { p_name: string; p_ok: boolean; p_open_seconds?: number; p_threshold?: number };
+        Returns: undefined;
+      };
       categories_with_counts: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -1467,11 +1601,80 @@ export type Database = {
           retry_after_seconds: number;
         }[];
       };
+      claim_job: {
+        Args: { p_id: number; p_worker: string };
+        Returns: {
+          attempts: number;
+          created_at: string;
+          id: number;
+          idempotency_key: string | null;
+          job_type: string;
+          last_error: string | null;
+          locked_at: string | null;
+          locked_by: string | null;
+          max_attempts: number;
+          payload: NonNullable<Json>;
+          run_at: string;
+          source_event_id: number | null;
+          status: Database["public"]["Enums"]["job_status"];
+          updated_at: string;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "jobs";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
+      claim_jobs: {
+        Args: { p_limit?: number; p_worker: string };
+        Returns: {
+          attempts: number;
+          created_at: string;
+          id: number;
+          idempotency_key: string | null;
+          job_type: string;
+          last_error: string | null;
+          locked_at: string | null;
+          locked_by: string | null;
+          max_attempts: number;
+          payload: NonNullable<Json>;
+          run_at: string;
+          source_event_id: number | null;
+          status: Database["public"]["Enums"]["job_status"];
+          updated_at: string;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "jobs";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
+      cron_acquire: { Args: { p_holder: string; p_name: string; p_ttl_seconds: number }; Returns: boolean };
+      cron_release: { Args: { p_holder: string; p_name: string }; Returns: undefined };
       current_user_role: {
         Args: Record<PropertyKey, never>;
         Returns: Database["public"]["Enums"]["user_role"];
       };
+      defer_job: { Args: { p_id: number; p_retry_in_ms: number }; Returns: undefined };
+      due_review_reminders: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          assignment_id: string;
+          due_date: string;
+          reviewer_email: string;
+          reviewer_name: string;
+          title: string;
+        }[];
+      };
+      errors_since: { Args: { p_minutes: number }; Returns: number };
+      fail_job: {
+        Args: { p_error: string; p_id: number; p_retry_in_ms: number; p_retryable: boolean };
+        Returns: string;
+      };
       feature_enabled: { Args: { p_key: string }; Returns: boolean };
+      finish_job: { Args: { p_id: number }; Returns: undefined };
       is_assigned_reviewer: { Args: { p_submission_id: string }; Returns: boolean };
       is_published_article: { Args: { p_article_id: string }; Returns: boolean };
       is_staff: { Args: Record<PropertyKey, never>; Returns: boolean };
@@ -1493,6 +1696,14 @@ export type Database = {
           views: number;
         }[];
       };
+      orphaned_objects: {
+        Args: { p_limit?: number; p_older_than_hours?: number };
+        Returns: {
+          bucket_id: string;
+          name: string;
+        }[];
+      };
+      record_app_error: { Args: Record<PropertyKey, never>; Returns: undefined };
       record_metric_event: {
         Args: {
           p_article_id?: string;
@@ -1502,7 +1713,9 @@ export type Database = {
         };
         Returns: boolean;
       };
+      release_stale_jobs: { Args: { p_older_than_seconds?: number }; Returns: number };
       reorder_rows: { Args: { p_ids: string[]; p_table: string }; Returns: undefined };
+      resolve_dead_letter: { Args: { p_action: string; p_id: number }; Returns: undefined };
       reviewer_queue: {
         Args: Record<PropertyKey, never>;
         Returns: {

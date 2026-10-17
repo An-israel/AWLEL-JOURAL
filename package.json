@@ -21,6 +21,7 @@
     "seed:admin": "node --env-file-if-exists=.env.local scripts/create-super-admin.mjs"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
     "@sentry/nextjs": "^11.8.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",

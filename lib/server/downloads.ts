@@ -6,7 +6,8 @@ import { fileNamePart } from "@/lib/file-names";
 import { issueFileStem } from "@/lib/issue-label";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabasePublicClient } from "@/lib/supabase/public";
-import { notFound } from "./errors";
+import { ApiError, notFound } from "./errors";
+import { logger } from "./logger";
 import { recordEvent } from "./metrics";
 
 /*
@@ -20,14 +21,33 @@ export type DownloadFormat = "pdf" | "docx";
 
 const SIGNED_URL_SECONDS = 60;
 
+/** Storage is down or slow: say so plainly and suggest trying again (item 87). */
+const storageUnavailable = () =>
+  new ApiError(
+    503,
+    "storage_unavailable",
+    "The file store is not responding. Please try again in a few minutes.",
+    {
+      "Retry-After": "120",
+    },
+  );
+
 async function redirectToFile(fileId: string, fileName: string, inline: boolean): Promise<Response> {
   const admin = createSupabaseAdminClient();
-  const { data: file } = await admin.from("stored_files").select("bucket, path").eq("id", fileId).single();
+  const { data: file, error: lookupError } = await admin
+    .from("stored_files")
+    .select("bucket, path")
+    .eq("id", fileId)
+    .maybeSingle();
+  if (lookupError) throw storageUnavailable();
   if (!file) throw notFound("This file is not available.");
   const { data, error } = await admin.storage
     .from(file.bucket)
     .createSignedUrl(file.path, SIGNED_URL_SECONDS, inline ? undefined : { download: fileName });
-  if (error || !data) throw new Error(`could not sign ${file.bucket}/${file.path}: ${error?.message}`);
+  if (error || !data) {
+    logger.error({ err: error?.message, bucket: file.bucket }, "could not sign a download URL");
+    throw storageUnavailable();
+  }
   return NextResponse.redirect(data.signedUrl, {
     status: 302,
     headers: { "Cache-Control": "no-store", "X-Robots-Tag": "noindex" },

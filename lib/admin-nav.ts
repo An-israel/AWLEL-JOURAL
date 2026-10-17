@@ -31,7 +31,8 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   { href: "/admin/messages", label: "Messages", icon: "mail", roles: STAFF },
   { href: "/admin/users", label: "Users and Roles", icon: "shield-check", roles: SUPER },
   { href: "/admin/settings", label: "Settings", icon: "settings", roles: SUPER },
-  { href: "/admin/audit-log", label: "Audit Log", icon: "scroll-text", roles: SUPER, comingIn: "M8" },
+  { href: "/admin/audit-log", label: "Audit Log", icon: "scroll-text", roles: SUPER },
+  { href: "/admin/operations", label: "Operations", icon: "activity", roles: SUPER },
   { href: "/admin/profile", label: "My profile", icon: "circle-user-round", roles: ALL },
 ];
 

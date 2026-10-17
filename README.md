@@ -15,8 +15,12 @@ Website and editorial system for _AWLEL: University of Nigeria Journal of Langua
 | Styling       | Tailwind CSS 4 with AWLEL tokens; Poppins + Source Serif 4 via `next/font` |
 | Hosting       | Vercel (app), Supabase (database and files)                                |
 | Observability | pino JSON logs, OpenTelemetry / Sentry, Vercel Analytics, `/api/health`    |
+| Operations    | Postgres job queue; Vercel Cron (daily) + GitHub Actions (every 30 min, weekly backup) |
 
 Engineering decisions for every production concern are in [`docs/ENGINEERING.md`](docs/ENGINEERING.md).
+What to do when something breaks, how to restore from a backup, and the one-time operational setup
+(scheduled tasks, backups to Google Drive, uptime monitor, email webhooks) are in
+[`docs/RUNBOOK.md`](docs/RUNBOOK.md). A public read-only JSON API is at `/api/v1`.
 
 ---
 
@@ -114,6 +118,9 @@ demote or deactivate the last active Super Admin.
    fill in within a few minutes of the schema appearing, or straight away on the next deploy.
 6. Every pull request gets a preview deployment; merging to the production branch deploys production. Roll
    back instantly from **Deployments → ⋯ → Promote to Production** on an earlier deployment.
+7. Finish the operational setup in [`docs/RUNBOOK.md`](docs/RUNBOOK.md), “One-time setup”: `ALERT_EMAIL`,
+   the GitHub secrets for the 30-minute queue worker and the weekly backup, the uptime monitor and the
+   Resend webhook. `vercel.json` registers the daily cron automatically.
 
 If the Supabase GitHub integration is connected, set its **production branch** to the same branch Vercel
 deploys to production, with the Supabase directory `supabase`. Supabase then applies new migrations on every

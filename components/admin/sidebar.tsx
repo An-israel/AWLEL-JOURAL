@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Activity,
   CircleUserRound,
   ClipboardCheck,
   FileText,
@@ -41,6 +42,7 @@ const ICONS: Record<string, LucideIcon> = {
   settings: Settings,
   "scroll-text": ScrollText,
   "circle-user-round": CircleUserRound,
+  activity: Activity,
 };
 
 interface Props {

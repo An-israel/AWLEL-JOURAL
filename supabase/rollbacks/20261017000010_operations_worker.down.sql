@@ -1,0 +1,24 @@
+-- Reverses 20261017000010_operations_worker.sql.
+alter publication supabase_realtime drop table public.domain_events;
+drop policy if exists "domain_events: staff read workflow events" on public.domain_events;
+drop function if exists public.orphaned_objects(int, int);
+drop function if exists public.due_review_reminders();
+drop table if exists public.webhook_events;
+drop function if exists public.errors_since(int);
+drop function if exists public.record_app_error();
+drop table if exists public.error_counts;
+drop table if exists public.email_suppressions;
+drop function if exists public.breaker_record(text, boolean, int, int);
+drop function if exists public.breaker_allows(text);
+drop table if exists public.circuit_breakers;
+drop function if exists public.cron_release(text, text);
+drop function if exists public.cron_acquire(text, text, int);
+drop table if exists public.cron_runs;
+drop table if exists public.cron_leases;
+drop function if exists public.resolve_dead_letter(bigint, text);
+drop function if exists public.release_stale_jobs(int);
+drop function if exists public.defer_job(bigint, int);
+drop function if exists public.fail_job(bigint, text, boolean, int);
+drop function if exists public.finish_job(bigint);
+drop function if exists public.claim_job(bigint, text);
+drop function if exists public.claim_jobs(text, int);
