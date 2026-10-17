@@ -1463,7 +1463,15 @@ export type Database = {
       is_staff: { Args: Record<PropertyKey, never>; Returns: boolean };
       is_submission_author: { Args: { p_submission_id: string }; Returns: boolean };
       is_super_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
+      reorder_rows: { Args: { p_ids: string[]; p_table: string }; Returns: undefined };
       row_changed: { Args: { ignored: string[]; new_row: Json; old_row: Json }; Returns: boolean };
+      save_article: {
+        Args: { p_authors: Json; p_data: Json; p_expected_version: number; p_id: string };
+        Returns: {
+          id: string;
+          version: number;
+        }[];
+      };
       schema_version: { Args: Record<PropertyKey, never>; Returns: string };
       search_articles: {
         Args: {
@@ -1485,6 +1493,15 @@ export type Database = {
           title_highlight: string;
           total_count: number;
         }[];
+      };
+      set_issue_status: {
+        Args: {
+          p_expected_version: number;
+          p_include_articles?: boolean;
+          p_issue_id: string;
+          p_status: Database["public"]["Enums"]["publish_status"];
+        };
+        Returns: number;
       };
       submission_id_from_path: { Args: { p_name: string }; Returns: string };
     };
