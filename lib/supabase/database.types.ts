@@ -1530,26 +1530,6 @@ export type Database = {
           position: number | null;
         };
         ComputedFields: never;
-        Insert: {
-          affiliation?: string | null;
-          article_id?: string | null;
-          email?: never;
-          full_name?: string | null;
-          id?: string | null;
-          is_corresponding?: boolean | null;
-          orcid?: string | null;
-          position?: number | null;
-        };
-        Update: {
-          affiliation?: string | null;
-          article_id?: string | null;
-          email?: never;
-          full_name?: string | null;
-          id?: string | null;
-          is_corresponding?: boolean | null;
-          orcid?: string | null;
-          position?: number | null;
-        };
         Relationships: [
           {
             foreignKeyName: "article_authors_article_id_fkey";
@@ -1713,9 +1693,27 @@ export type Database = {
         };
         Returns: boolean;
       };
+      record_revision: {
+        Args: { p_file_id: string };
+        Returns: {
+          recorded: boolean;
+          submission_id: string;
+          title: string;
+        }[];
+      };
       release_stale_jobs: { Args: { p_older_than_seconds?: number }; Returns: number };
       reorder_rows: { Args: { p_ids: string[]; p_table: string }; Returns: undefined };
       resolve_dead_letter: { Args: { p_action: string; p_id: number }; Returns: undefined };
+      reviewer_files: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          created_at: string;
+          file_id: string;
+          kind: Database["public"]["Enums"]["submission_file_kind"];
+          submission_id: string;
+          version: number;
+        }[];
+      };
       reviewer_queue: {
         Args: Record<PropertyKey, never>;
         Returns: {

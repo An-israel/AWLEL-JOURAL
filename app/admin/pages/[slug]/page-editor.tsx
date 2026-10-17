@@ -85,7 +85,12 @@ export function PageEditor({ page }: { page: PageEditorData }) {
         </div>
         <div>
           <p className="text-sm font-medium">Live preview</p>
-          <div className="mt-2 max-h-[40rem] overflow-y-auto rounded-md border border-line bg-paper p-6">
+          <div
+            tabIndex={0}
+            role="region"
+            aria-label="Preview"
+            className="mt-2 max-h-[40rem] overflow-y-auto rounded-md border border-line bg-paper p-6"
+          >
             <h2 className="text-3xl">{form.title}</h2>
             <hr className="rule-gold mt-4 mb-6 w-16" />
             {/* Preview of the editor's own schema-limited output; the server sanitises on save and on render. */}

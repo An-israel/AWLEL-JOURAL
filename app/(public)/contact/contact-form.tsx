@@ -132,7 +132,11 @@ export function ContactForm() {
 
       <div className="flex flex-wrap items-center justify-between gap-4">
         <p className="text-xs text-ink-muted">
-          We use your details only to reply to you. See our <a href="/privacy">privacy policy</a>.
+          We use your details only to reply to you. See our{" "}
+          <a href="/privacy" className="underline">
+            privacy policy
+          </a>
+          .
         </p>
         <button
           type="submit"

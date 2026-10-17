@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { sanitizeRichText } from "@/lib/sanitize";
 import { userWithRole } from "@/lib/auth";
 import { slugify } from "@/lib/admin/slug";
 import { fromDbError, forbiddenResult, invalid, type ActionResult } from "@/lib/admin/result";
@@ -198,7 +199,7 @@ export async function createArticleFromSubmission(input: {
         category_id: s.category_id ?? "",
         title: s.title,
         slug,
-        abstract: s.abstract,
+        abstract: sanitizeRichText(s.abstract),
         keywords: s.keywords,
         first_page: "",
         last_page: "",

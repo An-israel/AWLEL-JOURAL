@@ -28,16 +28,23 @@ async function Content({ params }: { params: Props["params"] }) {
   const { data: queue } = await supabase.rpc("reviewer_queue");
   const a = queue?.find((q) => q.assignment_id === id);
   if (!a) notFound();
-  // RLS shows reviewers only the manuscript versions and their own annotated file.
-  const { data: files } = await supabase
-    .from("submission_files")
-    .select("id, kind, version, created_at, original_name, uploaded_by")
-    .eq("submission_id", a.submission_id)
-    .order("created_at");
-  const manuscripts = (files ?? []).filter((f) => f.kind !== "reviewer_annotated");
-  const annotated = (files ?? []).find(
-    (f) => f.id && f.kind === "reviewer_annotated" && f.uploaded_by === user.id,
-  );
+  // Reviewers see manuscripts only through reviewer_files() (no names or
+  // uploader), plus the annotated file they uploaded themselves.
+  const [{ data: assignedFiles }, { data: ownFiles }] = await Promise.all([
+    supabase.rpc("reviewer_files"),
+    supabase
+      .from("submission_files")
+      .select("id, original_name, created_at")
+      .eq("submission_id", a.submission_id)
+      .eq("kind", "reviewer_annotated")
+      .eq("uploaded_by", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1),
+  ]);
+  const manuscripts = (assignedFiles ?? [])
+    .filter((f) => f.submission_id === a.submission_id)
+    .map((f) => ({ id: f.file_id, kind: f.kind, version: f.version, created_at: f.created_at }));
+  const annotated = ownFiles?.[0] ?? null;
 
   return (
     <>

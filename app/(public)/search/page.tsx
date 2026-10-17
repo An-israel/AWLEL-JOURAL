@@ -216,7 +216,7 @@ export default function SearchPage({ searchParams }: Props) {
       <Suspense
         fallback={
           <div
-            className="mt-10 h-64 animate-pulse rounded-lg bg-line/60"
+            className="mt-10 h-64 min-h-[70svh] animate-pulse rounded-lg bg-line/60"
             aria-busy="true"
             aria-label="Searching"
           />

@@ -8,7 +8,9 @@ import { isStaff } from "@/lib/roles";
 import { logger } from "@/lib/server/logger";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { checkSubmissionFile, safeFileName, type SubmissionFileKind } from "./file-rules";
+import { signatureMatches } from "@/lib/file-signature";
+import { readObjectHead } from "@/lib/server/file-head";
+import { checkSubmissionFile, type SubmissionFileKind } from "./file-rules";
 
 /*
  * Files in the private `submissions` bucket. Who may add which kind:
@@ -69,7 +71,13 @@ export async function requestSubmissionUpload(
   if (problem) return { ok: false, message: problem };
   if (!(await mayUpload(submissionId, kind))) return forbiddenResult;
 
-  const path = `${submissionId}/${kind}/${randomUUID()}-${safeFileName(fileName)}`;
+  // Neutral object names: the original name (often the author's surname) is
+  // kept only in the database, so signed links never reveal it (blinding).
+  const ext = fileName
+    .slice(fileName.lastIndexOf("."))
+    .toLowerCase()
+    .replace(/[^.a-z0-9]/g, "");
+  const path = `${submissionId}/${kind}/${randomUUID()}${ext}`;
   const { data, error } = await createSupabaseAdminClient().storage.from(BUCKET).createSignedUploadUrl(path);
   if (error || !data) {
     logger.error({ err: error?.message }, "could not create submission upload URL");
@@ -90,8 +98,16 @@ export async function attachSubmissionFile(
   if (!user || !(await mayUpload(submissionId, kind))) return forbiddenResult;
   if (!path.startsWith(`${submissionId}/${kind}/`) || path.includes(".."))
     return { ok: false, message: "Invalid upload path." };
+  const problem = checkSubmissionFile({ name: fileName, type: mimeType, size });
+  if (problem) return { ok: false, message: problem };
 
   const admin = createSupabaseAdminClient();
+  // The content must match the declared type, not just the name (magic bytes).
+  const head = await readObjectHead(BUCKET, path);
+  if (!head || !signatureMatches(mimeType, head)) {
+    await admin.storage.from(BUCKET).remove([path]);
+    return { ok: false, message: `${fileName} doesn't look like a real Word or PDF file.` };
+  }
   const dir = path.slice(0, path.lastIndexOf("/"));
   const name = path.slice(path.lastIndexOf("/") + 1);
   const { data: listing } = await admin.storage.from(BUCKET).list(dir, { search: name, limit: 1 });
@@ -127,29 +143,38 @@ export async function attachSubmissionFile(
 }
 
 /**
- * Signed download link. RLS decides whether the caller may see the file at
- * all. Reviewers get a neutral file name: original names often contain the
- * author's name, which would break blinding.
+ * Signed download link. Staff, the author and the uploader read the file row
+ * through RLS. Reviewers can't read file rows at all (they carry the original
+ * name and uploader); their access is checked against reviewer_files(), and
+ * they get a neutral file name, because original names often contain the
+ * author's name.
  */
 export async function submissionFileUrl(fileId: string): Promise<ActionResult<{ url: string }>> {
   if (!z.uuid().safeParse(fileId).success) return { ok: false, message: "Invalid file." };
   const user = await getCurrentUser();
   if (!user) return forbiddenResult;
   const supabase = await createSupabaseServerClient();
-  const { data: file } = await supabase
+  const admin = createSupabaseAdminClient();
+
+  const { data: visible } = await supabase
     .from("submission_files")
-    .select("path, original_name, kind, version, submission_id, uploaded_by")
+    .select("id")
     .eq("id", fileId)
     .maybeSingle();
+  let blinded = false;
+  if (!visible) {
+    const { data: assigned } = await supabase.rpc("reviewer_files");
+    if (!assigned?.some((f) => f.file_id === fileId)) return { ok: false, message: "File not found." };
+    blinded = true;
+  }
+  // Allowed: read the details with the service role (the reviewer can't).
+  const { data: file } = await admin
+    .from("submission_files")
+    .select("path, original_name, kind, version, submission_id")
+    .eq("id", fileId)
+    .single();
   if (!file) return { ok: false, message: "File not found." };
 
-  const { data: own } = await supabase
-    .from("submissions")
-    .select("id")
-    .eq("id", file.submission_id)
-    .eq("author_id", user.id)
-    .maybeSingle();
-  const seesRealName = isStaff(user.role) || Boolean(own) || file.uploaded_by === user.id;
   const ext = file.original_name.slice(file.original_name.lastIndexOf(".")).toLowerCase();
   const label =
     file.kind === "revision"
@@ -157,12 +182,12 @@ export async function submissionFileUrl(fileId: string): Promise<ActionResult<{ 
       : file.kind === "reviewer_annotated"
         ? "Annotated_review"
         : "Manuscript";
-  const downloadName = seesRealName
-    ? file.original_name
-    : `${label}_${file.submission_id.slice(0, 8)}_v${file.version}${ext}`;
+  const downloadName = blinded
+    ? `${label}_${file.submission_id.slice(0, 8)}_v${file.version}${ext}`
+    : file.original_name;
 
-  const { data, error } = await createSupabaseAdminClient()
-    .storage.from(BUCKET)
+  const { data, error } = await admin.storage
+    .from(BUCKET)
     .createSignedUrl(file.path, 300, { download: downloadName });
   if (error || !data) return { ok: false, message: "Could not open the file." };
   return { ok: true, data: { url: data.signedUrl } };

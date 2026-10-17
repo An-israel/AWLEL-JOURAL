@@ -30,7 +30,18 @@ export function landingPathFor(role: UserRole): string {
  * `?next=` can't be used to bounce people to another site (open redirect).
  */
 export function safeNextPath(next: string | null | undefined): string | null {
-  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) return null;
-  if (/[\r\n]/.test(next)) return null;
-  return next;
+  if (!next || !next.startsWith("/")) return null;
+  // Browsers drop tabs and newlines inside URLs ("/\t/evil.com" becomes
+  // "//evil.com"), so no control characters, spaces or backslashes at all.
+  if (/[\u0000-\u0020\u007f\\]/.test(next)) return null;
+  // Then resolve it the way the browser will and insist it stays on this site.
+  const base = "https://same-site.invalid";
+  let resolved: URL;
+  try {
+    resolved = new URL(next, base);
+  } catch {
+    return null;
+  }
+  if (resolved.origin !== base) return null;
+  return resolved.pathname + resolved.search + resolved.hash;
 }

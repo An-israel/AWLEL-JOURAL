@@ -70,7 +70,7 @@ export default async function HomePage() {
               {settings.journalName}
             </h1>
             <hr className="rule-gold mt-8 w-24" />
-            <p className="mt-6 max-w-xl font-serif text-reading text-ink-muted">
+            <p className="mt-6 max-w-xl text-lg leading-relaxed text-ink-muted">
               A forum for scholars publishing on the African literary and linguistic experience and on issues
               in global English language and literary studies, published since 2001 by the{" "}
               {settings.publisher}.
@@ -96,11 +96,7 @@ export default async function HomePage() {
 
           {latest ? (
             <div className="flex justify-center lg:justify-end lg:pr-6">
-              <Link
-                href={latest.path}
-                className="group block w-56 no-underline sm:w-64 lg:w-[19rem]"
-                aria-label={`Latest issue: ${latest.label}`}
-              >
+              <Link href={latest.path} className="group block w-56 no-underline sm:w-64 lg:w-[19rem]">
                 <div className="rounded-[6px] bg-white p-2 shadow-[0_24px_48px_-20px_rgba(17,17,17,0.55)] transition-transform duration-300 group-hover:-translate-y-1">
                   <IssueCover issue={latest} priority sizes="(min-width: 1024px) 304px, 256px" />
                 </div>

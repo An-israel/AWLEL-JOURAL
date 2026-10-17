@@ -398,7 +398,7 @@ async function ArticleContent({ params }: { params: Props["params"] }) {
 function ArticleSkeleton() {
   return (
     <div
-      className="mx-auto max-w-site animate-pulse space-y-5 px-4 py-12 sm:px-6 lg:px-8"
+      className="mx-auto min-h-[100svh] max-w-site animate-pulse space-y-5 px-4 py-12 sm:px-6 lg:px-8"
       aria-busy="true"
       aria-label="Loading article"
     >

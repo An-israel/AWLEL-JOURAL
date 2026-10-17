@@ -90,6 +90,14 @@ test.describe("editor content workflows", () => {
     await page.getByRole("button", { name: "Create draft article" }).click();
     await expect(page).toHaveURL(/\/admin\/articles\/[0-9a-f-]{36}$/);
 
+    // A file whose content isn't a PDF is refused, whatever its name and type say.
+    await page.getByLabel("Choose article pdf").setInputFiles({
+      name: "fake.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.from("<html><script>alert(1)</script></html>"),
+    });
+    await expect(page.getByText("fake.pdf doesn't look like a real .pdf file.")).toBeVisible();
+
     // Upload the PDF straight to storage through a signed URL.
     await page.getByLabel("Choose article pdf").setInputFiles(fixture("Testauthor_article.pdf"));
     await expect(page.getByText("Article PDF uploaded.")).toBeVisible();

@@ -25,6 +25,19 @@ the image.
 Put a TLS-terminating reverse proxy (nginx, Caddy or the university load balancer) in front of port 3000.
 Use `/api/health/live` as the liveness probe and `/api/health/ready` as the readiness probe.
 
+**The proxy must set the client's IP.** Rate limits (sign-in, contact form, downloads) and view counting read
+the visitor's address from `X-Real-IP` or the first `X-Forwarded-For` entry. The proxy must **overwrite**
+those headers with the real client address (nginx: `proxy_set_header X-Real-IP $remote_addr;` and
+`proxy_set_header X-Forwarded-For $remote_addr;`), never pass through what the client sent; otherwise anyone
+can bypass the limits by sending their own header. Don't expose port 3000 directly.
+
+**Scheduled tasks** run from Vercel Cron on Vercel. Self-hosted, call them from the server's cron instead:
+
+```cron
+17 5 * * *   curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://awlel.unn.edu.ng/api/cron/daily
+*/30 * * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://awlel.unn.edu.ng/api/cron/queue
+```
+
 ## Supabase
 
 Run Supabase with its official self-hosting Docker Compose setup

@@ -15,36 +15,24 @@ export async function recordRevision(input: { submissionId: string; fileId: stri
   const user = await getCurrentUser();
   if (!user) return forbiddenResult;
   const supabase = await createSupabaseServerClient();
-  const { data: sub } = await supabase
-    .from("submissions")
-    .select("id, title")
-    .eq("id", parsed.data.submissionId)
-    .eq("author_id", user.id)
-    .maybeSingle();
-  const { data: file } = await supabase
-    .from("submission_files")
-    .select("id")
-    .eq("id", parsed.data.fileId)
-    .eq("submission_id", parsed.data.submissionId)
-    .eq("kind", "revision")
-    .maybeSingle();
-  if (!sub || !file) return forbiddenResult;
+  // Checks in SQL: the file is a revision this author uploaded, and revisions
+  // were requested. Records the note once per file.
+  const { data, error } = await supabase.rpc("record_revision", { p_file_id: parsed.data.fileId });
+  const sub = data?.[0];
+  if (error || !sub || sub.submission_id !== parsed.data.submissionId) return forbiddenResult;
+  if (!sub.recorded) return { ok: true, message: "Revised manuscript sent to the editors." };
+  const file = { id: parsed.data.fileId };
 
-  await supabase.rpc("add_submission_note", {
-    p_submission_id: sub.id,
-    p_message: "Revised manuscript uploaded by the author.",
-    p_visible_to_author: true,
-  });
   await createSupabaseAdminClient()
     .from("domain_events")
     .insert({
       event_type: "submission.revised",
       aggregate_type: "submission",
-      aggregate_id: sub.id,
+      aggregate_id: sub.submission_id,
       actor_id: user.id,
       payload: { fileId: file.id },
     });
-  await notifyRevisionUploaded({ id: sub.id, title: sub.title, fileId: file.id });
-  revalidatePath(`/account/submissions/${sub.id}`);
+  await notifyRevisionUploaded({ id: sub.submission_id, title: sub.title, fileId: file.id });
+  revalidatePath(`/account/submissions/${sub.submission_id}`);
   return { ok: true, message: "Revised manuscript sent to the editors." };
 }

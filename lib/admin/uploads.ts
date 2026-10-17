@@ -5,6 +5,8 @@ import { updateTag } from "next/cache";
 import { z } from "zod";
 import { userWithRole } from "@/lib/auth";
 import { TAGS } from "@/lib/data/tags";
+import { signatureMatches } from "@/lib/file-signature";
+import { readObjectHead } from "@/lib/server/file-head";
 import { logger } from "@/lib/server/logger";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -135,6 +137,16 @@ export async function attachUpload(
     if (fileId) await admin.from("stored_files").delete().eq("id", fileId);
     await admin.storage.from(rule.bucket).remove([path]);
   };
+
+  // The content must match the declared type, not just the name (magic bytes).
+  const head = await readObjectHead(rule.bucket, path);
+  if (!head || !signatureMatches(mimeType, head)) {
+    await compensate();
+    return {
+      ok: false,
+      message: `${fileName} doesn't look like a real ${rule.extensions.join(" / ")} file.`,
+    };
+  }
 
   // Step 2: record the file (as the editor, so RLS and uploaded_by apply).
   const supabase = await createSupabaseServerClient();

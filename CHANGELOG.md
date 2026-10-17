@@ -6,6 +6,45 @@ All notable changes to this project are documented here. The project follows
 
 ## [Unreleased]
 
+### Milestone 9: Polish and launch
+
+#### Security (from a review of every action, route, policy and database function)
+
+- Fixed an open redirect after sign-in: `?next=` with a tab character could send people to another site.
+- Strengthened blind review: reviewers can no longer read file records (original names, storage paths,
+  uploader) or list the submissions bucket; they get a neutral file list and neutral file names, and new
+  manuscripts are stored under neutral names.
+- Timeline notes are staff-only; authors record a revision through a checked, once-per-file function.
+- Every upload must match its declared type by content (magic bytes), not just by name.
+- Abstracts from submissions and in the public API are sanitised; reviewers can only attach their own
+  annotated file; the schema version is hidden from the public; `/api/health` no longer shows raw errors
+  and is rate limited.
+
+#### Accessibility
+
+- Automated WCAG 2.1 AA checks (axe) on 17 public pages (desktop and phone) and 18 admin pages, all passing.
+- Fixed: link names that didn't include their visible text (logo, share buttons, latest-issue cover), the
+  cover badge's contrast, colour-only links in running text (now underlined), and a preview panel keyboard
+  users couldn't scroll.
+
+#### Performance
+
+- Public pages no longer load the Supabase client or zod (about 400 KB less JavaScript).
+- The large serif font files are no longer preloaded; the home hero text uses the preloaded sans font.
+- Removed layout shifts on the article, issue and category pages (loading skeletons now fill the screen).
+- The public author lookup is a join instead of a per-row function (86 ms → 4 ms on 2,000 articles).
+- Lighthouse: desktop 99–100 and mobile accessibility, best practices and SEO 100 on every public page; mobile
+  performance 90–98 (simulated slow phone).
+
+#### Docs and tooling
+
+- `docs/DNS_FOR_UNN_ICT.md`: the records UNN ICT needs to create, for the website and for email.
+- README: domain, email DNS and migration-branch notes. `docs/ENGINEERING.md`: Lighthouse, accessibility,
+  security review and test results; query plans; every item's final state.
+- `scripts/measure.sh`: Lighthouse and latency for any deployment.
+- Tests: N+1 query-count test, file-signature tests, security pgTAP tests, accessibility suite, fake-PDF upload
+  rejected end to end.
+
 ### Added — Milestone 8: Reliability and operations
 
 - Queue worker: jobs are claimed with `FOR UPDATE SKIP LOCKED`, retried with backoff (timeouts, provider

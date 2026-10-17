@@ -17,6 +17,9 @@ const sourceSerif = Source_Serif_4({
   subsets: ["latin", "latin-ext"],
   variable: "--font-source-serif",
   display: "swap",
+  // Not preloaded: four large files that would hold up the first paint on
+  // slow connections. Text shows in Georgia, then swaps (sizes are matched).
+  preload: false,
   style: ["normal", "italic"],
 });
 

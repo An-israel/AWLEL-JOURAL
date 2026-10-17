@@ -68,9 +68,11 @@ sample issue (Volume 26) from the admin before launch.
    npx supabase db push          # migrations: tables, RLS policies, storage buckets and policies
    ```
 
-   After the first push, merges to `main` apply new migrations automatically
-   (`.github/workflows/migrate.yml`, which needs the `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF` and
-   `SUPABASE_DB_PASSWORD` repository secrets).
+   After the first push, new migrations are applied automatically, either by the Supabase GitHub
+   integration (set its production branch to the branch Vercel deploys) or by
+   `.github/workflows/migrate.yml` on pushes to `main` (needs the `SUPABASE_ACCESS_TOKEN`,
+   `SUPABASE_PROJECT_REF` and `SUPABASE_DB_PASSWORD` repository secrets). Use one of the two, not both. If
+   your production branch isn't `main`, change the branch name in `migrate.yml` and `ci.yml`.
 
 3. Seed reference data once: run the contents of `supabase/seed.sql` in the SQL editor. It is idempotent.
    Skip the "SAMPLE CONTENT" section if you don't want the sample issue in production.
@@ -128,14 +130,22 @@ push to that branch (it does not run `seed.sql` on production; do that once by h
 
 ## Pointing awlel.unn.edu.ng at Vercel
 
-In Vercel, **Project → Settings → Domains → Add** `awlel.unn.edu.ng`. Then ask UNN ICT to create:
+1. In Vercel, **Project → Settings → Domains → Add** `awlel.unn.edu.ng`. Vercel shows the record it expects.
+2. Send UNN ICT [`docs/DNS_FOR_UNN_ICT.md`](docs/DNS_FOR_UNN_ICT.md), with the value from step 1 filled in.
+   In short:
 
-| Type  | Name                    | Value                                          |
-| ----- | ----------------------- | ---------------------------------------------- |
-| CNAME | `awlel` (in unn.edu.ng) | `cname.vercel-dns.com.` (use the value Vercel shows) |
+   | Type  | Name                    | Value                                                |
+   | ----- | ----------------------- | ---------------------------------------------------- |
+   | CNAME | `awlel` (in unn.edu.ng) | `cname.vercel-dns.com.` (use the value Vercel shows) |
 
-Vercel issues the TLS certificate automatically once the record resolves. Email DNS (SPF, DKIM, DMARC) for
-the sending domain is covered in `docs/ENGINEERING.md` (item 97).
+3. Once the record resolves, Vercel issues and renews the HTTPS certificate by itself. Then set
+   `NEXT_PUBLIC_SITE_URL=https://awlel.unn.edu.ng`, update Supabase → Auth → URL configuration (above) and
+   the `SITE_URL` GitHub secret, and redeploy.
+
+**Email.** For emails from the site to reach inboxes, the sending domain needs SPF, DKIM and DMARC records.
+Add the domain in Resend (Domains → Add) and create the records it lists: at your registrar if the journal
+bought its own domain, or through UNN ICT if sending from `awlel.unn.edu.ng` (section 2 of the DNS sheet).
+Then set `EMAIL_FROM` (for example `AWLEL Journal <no-reply@your-domain>`) and `RESEND_API_KEY` in Vercel.
 
 ## Editor's guide: publishing an issue
 

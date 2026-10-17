@@ -4,7 +4,7 @@ import { formatApa, formatBibtex, formatMla } from "@/lib/citations";
 import type { ArticleDetail, ArticleSummary, IssueSummary } from "@/lib/data/catalog";
 import type { SiteSettings } from "@/lib/data/site-settings";
 import { siteUrl } from "@/lib/env.public";
-import { richTextToPlain } from "@/lib/sanitize";
+import { richTextToPlain, sanitizeRichText } from "@/lib/sanitize";
 import { articleDownloadPath, issueDownloadPath } from "@/lib/storage";
 
 /*
@@ -111,7 +111,7 @@ export function articleDetailJson(a: ArticleDetail, settings: SiteSettings) {
       email: p.email,
     })),
     abstract: richTextToPlain(a.abstract),
-    abstract_html: a.abstract,
+    abstract_html: sanitizeRichText(a.abstract),
     keywords: a.keywords,
     doi: a.doi,
     citation_style: a.citationStyle,

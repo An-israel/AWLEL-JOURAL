@@ -51,7 +51,7 @@ export function IssueCover({
           AWLEL
         </span>
         <span
-          className="mt-[2.5cqw] self-start rounded-[1cqw] bg-coral px-[2cqw] py-[0.8cqw] font-bold tracking-[0.2em] uppercase"
+          className="mt-[2.5cqw] self-start rounded-[1cqw] bg-coral-ink px-[2cqw] py-[0.8cqw] font-bold tracking-[0.2em] uppercase"
           style={{ fontSize: "4.2cqw" }}
         >
           Journal

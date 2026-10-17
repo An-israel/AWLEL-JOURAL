@@ -227,6 +227,14 @@ The `drive.file` scope lets the backup see only the folder it created, nothing e
 3. Alert contact: the Super Admin's email (and a second person if possible).
 4. Optional: a public status page, linked from the Contact page.
 
+### Firewall
+
+1. Vercel → Project → Firewall: check **Bot Protection** is on (block known bad bots; search engines and
+   Google Scholar stay allowed).
+2. If the site is ever under attack (sudden traffic, the uptime monitor flapping), switch on **Attack
+   Challenge Mode** there until it passes; visitors see a brief browser check.
+3. The site's own rate limits keep working whatever the firewall setting.
+
 ### Email delivery webhooks
 
 1. Resend → Webhooks → Add endpoint: `https://awlel.unn.edu.ng/api/webhooks/resend`, events

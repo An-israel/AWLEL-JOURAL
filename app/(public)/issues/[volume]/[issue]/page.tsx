@@ -204,7 +204,7 @@ async function IssueContent({ params }: { params: Props["params"] }) {
 function IssueSkeleton() {
   return (
     <div
-      className="mx-auto max-w-site animate-pulse px-4 py-10 sm:px-6 lg:px-8"
+      className="mx-auto min-h-[100svh] max-w-site animate-pulse px-4 py-10 sm:px-6 lg:px-8"
       aria-busy="true"
       aria-label="Loading issue"
     >

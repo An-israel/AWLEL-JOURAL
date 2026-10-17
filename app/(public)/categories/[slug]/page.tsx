@@ -110,7 +110,7 @@ export default function CategoryPage({ params }: Props) {
     <Suspense
       fallback={
         <div
-          className="mx-auto max-w-site animate-pulse space-y-4 px-4 py-16 sm:px-6 lg:px-8"
+          className="mx-auto min-h-[100svh] max-w-site animate-pulse space-y-4 px-4 py-16 sm:px-6 lg:px-8"
           aria-busy="true"
         >
           <div className="h-12 w-1/2 rounded bg-line" />

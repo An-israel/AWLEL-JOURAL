@@ -15,11 +15,7 @@ export async function SiteHeader() {
       <div className="accent-bands h-1.5" aria-hidden />
       <div className="bg-white">
         <div className="mx-auto flex max-w-site items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-          <Link
-            href="/"
-            className="group flex min-w-0 items-center gap-3 no-underline"
-            aria-label="AWLEL — African, World Literature and English Language, home"
-          >
+          <Link href="/" className="group flex min-w-0 items-center gap-3 no-underline">
             {settings.logoUrl ? (
               <Image
                 src={settings.logoUrl}
@@ -44,6 +40,7 @@ export async function SiteHeader() {
               <span className="mt-1 hidden truncate text-[0.8rem] text-ink-muted md:block">
                 African, World Literature and English Language
               </span>
+              <span className="sr-only">, home page</span>
             </span>
           </Link>
 

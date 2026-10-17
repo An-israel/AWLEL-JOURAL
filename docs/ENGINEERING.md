@@ -19,8 +19,8 @@ to the journal's Google Drive. There are no other services.
 
 | #   | Item              | Status     | Where                                                         | State | Notes |
 | --- | ----------------- | ---------- | ------------------------------------------------------------- | ----- | ----- |
-| 1   | Rate limiting     | BUILD      | `lib/server/rate-limit.ts`, `check_rate_limit()` in migration 3 | 🟡 M1 | Postgres fixed-window limiter (no extra vendor). Returns 429 + `Retry-After` via `apiRoute`. Applied so far to login, sign-up and password reset (per IP and per account) and the contact form, manuscript submission (per account), downloads (120/min per IP) and the view counter (M7). Keys are HMAC-hashed; never raw IPs. Fails open if the DB is down. |
-| 2   | Caching           | BUILD      | `next.config.ts` (`cacheComponents`), `lib/data/*`             | 🟡 M1 | Public pages are static shells with `"use cache"` data tagged by entity (`lib/data/tags.ts`). Next 16 replaces `unstable_cache` with `"use cache"` + `cacheTag`; same behaviour. API `Cache-Control` set per route. |
+| 1   | Rate limiting     | BUILD      | `lib/server/rate-limit.ts`, `check_rate_limit()` in migration 3 | ✅ M9 | Postgres fixed-window limiter (no extra vendor). Returns 429 + `Retry-After`. Applied to login, sign-up and password reset (per IP and per account), contact form, manuscript submission (per account), downloads (120/min per IP), the view counter, the public API and `/api/health`. Keys are HMAC-hashed; never raw IPs. Fails open if the DB is down. Client IPs come from `x-real-ip`/`x-forwarded-for`, which Vercel sets; when self-hosting, put the app behind a proxy that overwrites them, or the IP limits can be bypassed (`docs/SELF_HOSTING.md`). |
+| 2   | Caching           | BUILD      | `next.config.ts` (`cacheComponents`), `lib/data/*`             | ✅ M9 | Public pages are static shells with `"use cache"` data tagged by entity (`lib/data/tags.ts`), served from the CDN. Public API responses `s-maxage=300, stale-while-revalidate=86400`; RSS `s-maxage=3600`; downloads, cron, health and admin are `no-store`. |
 | 3   | Load balancing    | PLATFORM   | Vercel                                                        | ✅    | Vercel routes each request to healthy function instances. |
 | 4   | Reverse proxies   | PLATFORM   | Vercel edge network                                           | ✅    | TLS termination, compression, HTTP/2+3 and routing happen at Vercel's edge before our code runs. |
 | 5   | API gateway       | BUILD      | `proxy.ts`, `lib/server/api.ts`                                | ✅ M1 | Next 16 renamed `middleware.ts` to `proxy.ts`. Proxy: request id, session refresh, auth gate. `apiRoute()`: origin check, rate limit, zod validation, logging, uniform JSON errors. |
@@ -54,8 +54,8 @@ to the journal's Google Drive. There are no other services.
 | #   | Item                 | Status     | Where                                   | State | Notes |
 | --- | -------------------- | ---------- | --------------------------------------- | ----- | ----- |
 | 25  | Indexing             | BUILD      | migrations 1–3                          | ✅ M1 | Every FK, slugs, status + published date (partial, excluding soft-deleted), GIN on `search_vector` and `keywords`, trigram on titles and author names, `metrics_events (article_id, created_at)`. `supabase db lint` clean. |
-| 26  | Query optimisation   | BUILD      | `lib/data/*`, RPCs                      | 🟡 M2 | Every query lists its columns; category counts and search are SQL functions (`categories_with_counts`, `search_articles`). `EXPLAIN ANALYZE` results are recorded once real issues are imported (a 3-article sample gives meaningless plans). |
-| 27  | N+1 queries          | BUILD      | data layer + test                       | 🟡 M2 | `lib/data/catalog.ts`: every list is a fixed number of queries. Authors for any set of articles come from one `in()` query; issue labels come from the cached issue list. An automated query-count check is added with the M9 test pass. |
+| 26  | Query optimisation   | BUILD      | `lib/data/*`, RPCs, migration 12        | ✅ M9 | Every query lists its columns. `EXPLAIN ANALYZE` on 2,000 synthetic articles / 4,000 authors (2026-10-17): issue contents 0.1 ms (index), article by slug 0.8 ms (unique index), most read 0.08 ms (partial index), category counts 2.8 ms, search 21 ms. The public author view scanned every author row through a per-row function (86 ms); migration 12 rewrote it as a join: 3.7 ms. |
+| 27  | N+1 queries          | BUILD      | data layer, `tests/unit/query-count.test.ts` | ✅ M9 | Every list is a fixed number of queries (authors for any set of articles in one `in()` query; issue labels from the cached issue list). A unit test counts the queries for the issue page, category page, RSS and popular lists with 1 and with 40 articles and fails if they differ. |
 | 28  | Connection pooling   | PLATFORM   | Supabase Supavisor                      | ✅    | The app talks to Supabase over HTTPS (PostgREST), which pools internally. Scripts use the pooled URL (port 6543) in `SUPABASE_DB_URL`. |
 | 29  | Read replicas        | NOT NEEDED | —                                       | ✅    | Reads are mostly served from the CDN cache. Supabase offers replicas if DB CPU stays above ~70%. |
 | 30  | Sharding             | NOT NEEDED | —                                       | ✅    | Thousands of articles, not billions of rows. Never likely for a journal. |
@@ -63,7 +63,7 @@ to the journal's Google Drive. There are no other services.
 | 32  | Replication          | PLATFORM   | Supabase                                | ✅    | Managed by Supabase (physical backups/WAL). |
 | 33  | Leader election      | NOT NEEDED | —                                       | ✅    | Cron runs take a lease (item 38), so only one run of a task proceeds at a time. |
 | 34  | CAP theorem          | DOC        | this file                               | ✅    | Single-region Postgres: we choose consistency. If the DB is unreachable, writes fail clearly while cached public pages keep serving. |
-| 35  | Eventual consistency | DOC        | this file                               | 🟡    | Article view/download counters update in the same transaction as the event. Article pages are cached, so the counts in their HTML can be up to a day old, but the page replaces them with live counts as soon as it loads (the view call returns them). Home "most read" lists refresh hourly. Dashboard charts are live. Public pages update within seconds of publishing (tag revalidation). |
+| 35  | Eventual consistency | DOC        | this file                               | ✅    | Article view/download counters update in the same transaction as the event. Article pages are cached, so the counts in their HTML can be up to a day old, but the page replaces them with live counts as soon as it loads. Home "most read" lists refresh hourly. Dashboard charts are live. Public pages, sitemap, RSS and sharing images update within seconds of publishing (tag revalidation). |
 | 36  | Optimistic locking   | BUILD      | `version` columns, `bump_version()`, `components/admin/conflict-banner.tsx` | ✅ M5 | Every admin save sends the version it loaded; a stale save changes nothing and shows “Someone else edited this. Reload…”. Covered by an end-to-end test. |
 | 37  | Pessimistic locking  | BUILD      | `claim_jobs()`, `claim_job()`, `fail_job()` | ✅ M8 | `SELECT … FOR UPDATE SKIP LOCKED`: concurrent workers never take the same job and never wait on each other. |
 | 38  | Distributed locks    | BUILD      | advisory locks, `cron_acquire()`        | ✅ M8 | Advisory locks for the last-Super-Admin check, issue publishing and the metrics rollup. Cron tasks take a lease row with a 5-minute expiry (a session advisory lock can't span HTTP calls), so a crashed run can't hold the lock forever. |
@@ -74,7 +74,7 @@ to the journal's Google Drive. There are no other services.
 
 | #   | Item               | Status | Where        | State | Notes |
 | --- | ------------------ | ------ | ------------ | ----- | ----- |
-| 41  | Memory leaks       | BUILD  | download/upload paths | 🟡 M1 | No module-level mutable state (cached data lives in Next's cache, not globals). Files never pass through functions: uploads use signed upload URLs, downloads redirect to one-minute signed URLs (M7), so file bytes never pass through a function. |
+| 41  | Memory leaks       | BUILD  | download/upload paths | ✅ M9 | No module-level mutable state (cached data lives in Next's cache, circuit state in Postgres). File bytes never pass through a function: uploads use signed upload URLs, downloads redirect to one-minute signed URLs, and the file-type check reads only the first 64 bytes with a Range request. |
 | 42  | Garbage collection | DOC    | this file    | ✅    | Covered by 41: no large in-memory objects in request paths. |
 | 43  | Thread safety      | DOC    | this file    | ✅    | Each function instance is single-threaded, but many run concurrently; all shared state is in Postgres. |
 | 44  | Backpressure       | BUILD  | `bulk-uploader.tsx`, `drainQueue()` | ✅ M8 | Bulk upload runs at most 3 uploads at once. The worker claims 10 jobs at a time and stops at a 45s budget; emails go one at a time; an open circuit pauses the provider instead of piling on. |
@@ -87,18 +87,18 @@ to the journal's Google Drive. There are no other services.
 | 46  | Horizontal scaling | PLATFORM | Vercel       | ✅    | App is stateless (sessions in cookies, state in Postgres). |
 | 47  | Vertical scaling   | PLATFORM | Supabase     | ✅    | Dashboard → Project Settings → Compute and Disk; upgrade the compute add-on (minutes of downtime). |
 | 48  | CDN                | PLATFORM | Vercel, Supabase Storage CDN | ✅ | |
-| 49  | Edge caching       | BUILD    | route config, headers | 🟡 M1 | Static pages get `s-maxage` + `stale-while-revalidate` from Next (verified: home `s-maxage=86400`). Files/images headers in M7. |
+| 49  | Edge caching       | BUILD    | route config, headers | ✅ M9 | Static pages: `s-maxage` + `stale-while-revalidate` from Next. `/_next/static` immutable. Covers and site images: optimised by `next/image` (AVIF/WebP, cached at the edge) from the public bucket, uploaded with `cache-control: max-age=3600`. API responses cached as in item 2. |
 | 50  | Cache invalidation | BUILD    | `lib/admin/revalidate.ts` | ✅ M5 | Every admin mutation calls `updateTag` for the tags it affects (issues, articles, the specific issue/article, categories, pages, board, settings, flags). End-to-end tests check that published changes are live immediately. M7: `sitemap.xml`, `feed.xml` and the OG images read the same tagged loaders, so they refresh with the pages. |
 
 ## Releases
 
 | #   | Item                 | Status   | Where                         | State | Notes |
 | --- | -------------------- | -------- | ----------------------------- | ----- | ----- |
-| 51  | Feature flags        | BUILD    | `feature_flags` table         | 🟡 M1 | Seeded: `submissions_open` (also enforced in RLS), `reviewer_module`, `home_most_read`, `google_sign_in`. Toggled in Admin → Settings (M5). |
+| 51  | Feature flags        | BUILD    | `feature_flags` table         | ✅ M5 | `submissions_open` (also enforced in RLS), `reviewer_module`, `home_most_read`, `google_sign_in`; toggled in Admin → Settings and audited. |
 | 52  | Blue-green           | PLATFORM | Vercel                        | ✅    | Every deployment is immutable; promotion to production is an atomic alias switch. |
 | 53  | Canary releases      | DOC      | Vercel                        | ✅    | Staff test on preview URLs. Vercel Rolling Releases (Pro plan) if available; otherwise NOT NEEDED at this traffic. |
 | 54  | Rolling deployments  | PLATFORM | Vercel                        | ✅    | |
-| 55  | Rollbacks            | BUILD    | Vercel, `supabase/rollbacks/`, file versions | 🟡 M1 | App: instant rollback in Vercel. DB: each migration has a `.down.sql`; CI applies all reversals then re-applies migrations. Files: every replaced file stays in `stored_files` and can be restored from its Versions list. |
+| 55  | Rollbacks            | BUILD    | Vercel, `supabase/rollbacks/`, file versions | ✅ M9 | App: instant rollback in Vercel. DB: every migration has a `.down.sql`; CI applies all reversals then re-applies migrations. Files: every replaced file stays in `stored_files` and can be restored. Data: weekly backups with a tested restore (item 83). |
 | 56  | Health checks        | BUILD    | `/api/health`                 | ✅ M1 | Checks DB and Storage with 3s timeouts; 200 or 503 with per-check latency. |
 | 57  | Liveness / readiness | BUILD    | `/api/health/live`, `/api/health/ready` | ✅ M1 | Used by the Docker `HEALTHCHECK` and uptime monitors. |
 
@@ -127,12 +127,12 @@ to the journal's Google Drive. There are no other services.
 | 71  | TLS                   | PLATFORM | Vercel; `Strict-Transport-Security`      | ✅    | HTTPS only; HSTS 2 years with preload. |
 | 72  | Encryption at rest    | PLATFORM | Supabase                                 | ✅    | AES-256 for database and storage. |
 | 73  | Encryption in transit | PLATFORM | Vercel, Supabase                         | ✅    | TLS from browser to Vercel and from functions to Supabase. |
-| 74  | WAF                   | PLATFORM | Vercel Firewall                          | ⏳ M9 | |
+| 74  | WAF                   | PLATFORM | Vercel Firewall                          | 🟡 M9 | Set up after deployment (runbook, “One-time setup → Firewall”): turn on the Vercel Firewall's bot protection and keep “Attack Challenge Mode” ready for an attack. The app's own rate limits (item 1) apply regardless. Cloudflare in front is possible if UNN ICT allows it, but not needed. |
 | 75  | DDoS protection       | PLATFORM | Vercel                                   | ✅    | Plus rate limiting (item 1). |
 | 76  | CORS                  | BUILD    | `lib/server/api.ts`                      | ✅ M1 | No CORS headers by default (same-origin only); `publicCors` only for `/api/v1/*`. |
 | 77  | CSRF                  | BUILD    | `lib/server/api.ts`                      | ✅ M1 | Mutating route handlers reject foreign `Origin`; Server Actions have Next's built-in origin check; Supabase cookies are `SameSite=Lax`. |
 | 78  | SQL injection         | BUILD    | all data access                          | ✅ M1 | Only the parameterised Supabase client and RPCs. Every SECURITY DEFINER function has `set search_path = ''`. |
-| 79  | XSS                   | BUILD    | `lib/security/headers.ts`                | 🟡 M1 | Strict CSP (`object-src 'none'`, `frame-ancestors 'none'`, `base-uri 'self'`). Inline scripts are allowed because nonces would make every page dynamic; sanitize-html on save and render arrives with the rich text editor (M3/M5). |
+| 79  | XSS                   | BUILD    | `lib/sanitize.ts`, `lib/security/headers.ts` | ✅ M9 | All rich text is sanitised on save and again on render (sanitize-html allow-list); every `dangerouslySetInnerHTML` goes through it (the security review checked each one). Abstracts copied from submissions and the API's `abstract_html` are sanitised too. JSON-LD escapes `<`. Strict CSP (`object-src 'none'`, `frame-ancestors 'none'`, `base-uri 'self'`); inline scripts are allowed because nonces would make every page dynamic. Uploads must match their declared type by content (magic bytes), so HTML can't be stored as a “PDF”. |
 | 80  | SSRF                  | BUILD    | —                                        | ✅    | The server makes no requests to user-supplied URLs. Allow-list helper added if ORCID lookup is built. |
 | 81  | Database migrations   | BUILD    | `supabase/migrations`, `migrate.yml`     | ✅ M1 | |
 | 82  | Schema versioning     | BUILD    | `schema_version()` RPC                   | ✅ M5 | Shown at the bottom of Admin → Settings. |
@@ -165,15 +165,15 @@ to the journal's Google Drive. There are no other services.
 
 | #   | Item               | Status | Where | State | Notes |
 | --- | ------------------ | ------ | ----- | ----- | ----- |
-| 89  | Cold starts        | BUILD  | `instrumentation-client.ts` | 🟡 M1 | Sentry loads only when configured; heavy libraries kept out of public pages. Next 16 `proxy.ts` always runs on Node (edge runtime is not supported there); health routes are tiny. |
+| 89  | Cold starts        | BUILD  | public bundles | ✅ M9 | Public pages ship only the framework plus small client components: in M9 the Supabase client (≈250 KB) and zod (≈100 KB) were removed from public pages (the account link reads the session cookie; public env checks don't use zod). Sentry loads only when configured. The edge runtime isn't used: Next 16's `proxy.ts` and Cache Components run on Node, and the light routes (health, redirects) already answer in tens of milliseconds. |
 | 90  | Serverless limits  | BUILD  | `lib/admin/upload-client.ts` | ✅ M5 | Files go browser → Supabase Storage through signed upload URLs (up to 100 MB per file); no file passes through a Vercel function. Resumable (TUS) uploads can be added if editors upload over unreliable connections. |
-| 91  | Latency            | DOC    | below | 🟡 M8 | Measured locally (below); re-measured on the production deployment in M9. |
-| 92  | Throughput         | DOC    | below | 🟡 M8 | As above. |
-| 93  | P99 latency        | DOC    | below | 🟡 M8 | As above. |
-| 94  | Tail latency       | DOC    | below | 🟡 M8 | As above, with the main tail causes and what limits them. |
-| 95  | Network partitions | DOC    | `lib/data/site-settings.ts` | 🟡 M1 | Public data loaders fall back or serve the cached page if Supabase is unreachable; admin shows "service unavailable" (M5). |
+| 91  | Latency            | DOC    | below, `scripts/measure.sh` | 🟡 M9 | Measured locally (below). Run `scripts/measure.sh https://awlel.unn.edu.ng` after deployment to record production figures here. |
+| 92  | Throughput         | DOC    | below | 🟡 M9 | As above. |
+| 93  | P99 latency        | DOC    | below | 🟡 M9 | As above. |
+| 94  | Tail latency       | DOC    | below | 🟡 M9 | As above, with the main tail causes and what limits them. |
+| 95  | Network partitions | BUILD  | `lib/data/catalog.ts`, `app/**/error.tsx` | ✅ M9 | If Supabase is unreachable, cached public pages keep serving; uncached ones show a friendly error page with a reference; the admin shows “the dashboard can't load this right now… anything you saved is safe”; downloads answer 503 with `Retry-After`; email waits in the queue. |
 | 96  | Clock skew         | BUILD  | migrations | ✅ M1 | All timestamps default to `now()` in Postgres; triggers set `updated_at`. |
-| 97  | DNS                | DOC    | README | 🟡 M1 | Web record documented. SPF/DKIM/DMARC once the sending domain is bought (M6). |
+| 97  | DNS                | DOC    | `docs/DNS_FOR_UNN_ICT.md`, README | ✅ M9 | A one-page sheet for UNN ICT: the CNAME for `awlel.unn.edu.ng`, CAA if used, and the SPF/DKIM/DMARC records for sending from `awlel.unn.edu.ng` (or the journal's own domain at its registrar). |
 | 98  | TCP vs UDP         | NOT NEEDED | — | ✅ | Platform level; HTTP/3 (QUIC over UDP) is negotiated by Vercel automatically. |
 | 99  | HTTP/2 and HTTP/3  | PLATFORM | Vercel | ✅ | |
 | 100 | gRPC               | NOT NEEDED | — | ✅ | No internal services. |
@@ -238,7 +238,7 @@ One page for whoever is looking after the site (item 66).
 Items 91–94. Measured on 2026-10-17 against a local production build (`next build && next start`, 4 vCPU) with
 the local Supabase stack, using autocannon (10 connections, 15 seconds; API and downloads kept under their
 rate limits). These numbers measure the app's own work; production adds network distance, and static pages
-are then served by Vercel's CDN instead of Node. They are re-measured on the production deployment in M9.
+are then served by Vercel's CDN instead of Node. Run `scripts/measure.sh https://awlel.unn.edu.ng` after deployment to add production figures.
 
 | Route | Kind | Throughput | p50 | p90 | p99 | Max |
 | ----- | ---- | ---------- | --- | --- | --- | --- |
@@ -295,6 +295,77 @@ Cost controls already in place: static pages and API responses are cached at the
 Next's optimiser at the sizes needed; raw view and download events are kept 13 months then rolled up; finished
 jobs, cron history and webhook records are deleted after 30–90 days; abandoned uploads are deleted after a
 day; files never pass through functions.
+
+## Quality bar (section 15) — results
+
+### Lighthouse
+
+Measured 2026-10-17 on a local production build with `scripts/measure.sh` (Lighthouse 12; mobile = simulated
+mid-range phone on slow 4G with 4× CPU slowdown; desktop = Lighthouse's desktop preset). Scores: performance,
+accessibility, best practices, SEO.
+
+| Page | Mobile | Desktop |
+| ---- | ------ | ------- |
+| Home | 90–95 · 100 · 100 · 100 | 100 · 100 · 100 · 100 |
+| Archive | 94–97 · 100 · 100 · 100 | 100 · 100 · 100 · 100 |
+| Issue | 92–97 · 100 · 100 · 100 | 100 · 100 · 100 · 100 |
+| Article | 92–96 · 100 · 100 · 100 | 99–100 · 100 · 100 · 100 |
+| About | 92–95 · 100 · 100 · 100 | 100 · 100 · 100 · 100 |
+| Contact | 96–98 · 100 · 100 · 100 | 100 · 100 · 100 · 100 |
+| Search results | 97 · 100 · 100 · 66 | 100 · 100 · 100 · 66 |
+
+- Accessibility, best practices and SEO are 100 on every page. Search results score 66 for SEO on purpose: they
+  are marked `noindex` so search engines index articles, not result lists.
+- Desktop performance is 99–100. **Mobile performance is 90–98**, against the target of 95: the score moves
+  between runs by about ±4, and its main cost is downloading and starting React's runtime (~150 KB compressed)
+  on the simulated slow phone. Real-browser timings are far lower (first paint and largest paint ≈ 0.2 s
+  unthrottled). Fixes made in M9: removed the Supabase client and zod from public pages (−400 KB of
+  JavaScript), stopped preloading the large serif font files, removed two layout shifts (the article page's
+  loading skeleton let the footer jump, CLS 0.31 → 0; the hero text reflowed when the serif font arrived).
+  Production on Vercel adds Brotli compression and HTTP/2 from the edge; re-run `scripts/measure.sh` there.
+
+### Accessibility (WCAG 2.1 AA)
+
+- `tests/e2e/a11y.spec.ts` runs axe-core (WCAG 2.0/2.1 A and AA rules) on 17 public pages, on desktop and on a
+  phone, and on 18 admin pages: no violations. M9 fixed: link names that didn't contain their visible text
+  (logo, share buttons, hero cover), an under-contrast cover badge, links in running text distinguished by colour
+  only (now underlined), and a scrollable preview that couldn't be reached by keyboard.
+- Built in from the start: skip link, one visible focus ring, landmarks and headings, labelled form fields with
+  inline errors announced to screen readers, `prefers-reduced-motion`, 44 px header and menu buttons, the chart's keyboard
+  read-out and table view.
+- Automated checks find about half of real issues. Before launch, check by hand with a keyboard only and with a
+  screen reader (NVDA on Windows or VoiceOver) on: submitting a manuscript, reviewing, and publishing an issue.
+
+### Security review against section 16
+
+An independent read-only review of every server action, route handler, RLS policy, storage policy and
+security-definer function (2026-10-17). No critical or high findings. Fixed in M9:
+
+| Finding | Severity | Fix |
+| ------- | -------- | --- |
+| `?next=` after sign-in could redirect off-site with a tab character (`/\t/evil.com`) | Medium | `safeNextPath` rejects control characters and checks the resolved origin; unit tested |
+| Reviewers could read file rows (original names, storage paths, uploader) and list the submissions bucket, which could reveal the author or other reviewers | Medium | Reviewers read no file rows; `reviewer_files()` returns ids and versions only; direct bucket access removed for authors and reviewers; new uploads stored under neutral names; pgTAP tested |
+| Authors could write arbitrary timeline notes | Low | `add_submission_note` is staff-only; authors use `record_revision`, which checks the file and status and records once |
+| Author HTML could reach the public API unsanitised | Low | Sanitised when an article is created from a submission and in the API |
+| Reviewers could attach someone else's file or change bookkeeping columns | Low | Trigger checks the annotated file is theirs and on the same submission |
+| Schema version readable anonymously | Low | Revoked from `anon` |
+| `/api/health` returned raw error text | Low | Generic per-dependency status; details logged; rate limited |
+| File type trusted from the name and declared MIME type | Low | Content must match (magic bytes) for every upload; tested |
+
+Accepted, documented: IP-based limits depend on the proxy setting client-IP headers (true on Vercel; see item 1);
+`METRICS_SALT` falls back to the Supabase JWT secret until set, so set it in production. Also checked and fine:
+every server action validates with zod and checks role or ownership; every service-role use comes after that
+check; all security-definer functions set `search_path`; no `any` in the code; no server-side fetch of
+user-supplied URLs; secrets never reach client bundles; CSRF covered by Server Action origin checks, `apiRoute`'s
+Origin check and signed or bearer-protected machine endpoints.
+
+### Tests
+
+| Kind | Count | Covers |
+| ---- | ----- | ------ |
+| Unit (Vitest) | 76 | citations (APA, MLA, BibTeX, RIS), issue labels, roles and redirects, slugs, CSV and bulk matching, file rules and signatures, SEO tags and JSON-LD, bots, alerts, webhook signatures, failure drills, N+1 query counts |
+| Database (pgTAP) | 82 | RLS for every role, triggers, review blinding, analytics, queue and cron functions, M9 security rules |
+| End to end (Playwright) | 79 + 35 a11y | browse archive → issue → article → download; author submits; editor assigns a reviewer; reviewer submits a review; editor publishes an article; Super Admin changes a role; bulk upload; stale edits; analytics; operations; API; accessibility |
 
 ## Data model changes from the brief
 
