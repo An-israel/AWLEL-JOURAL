@@ -1,5 +1,6 @@
 import "server-only";
 import type { Metadata } from "next";
+import { DEFAULT_OG_IMAGE } from "@/lib/site";
 import { getPage, type StaticPageSlug } from "./pages";
 
 export async function staticPageMetadata(slug: StaticPageSlug, fallbackTitle: string): Promise<Metadata> {
@@ -10,6 +11,6 @@ export async function staticPageMetadata(slug: StaticPageSlug, fallbackTitle: st
     title,
     description,
     alternates: { canonical: `/${slug}` },
-    openGraph: { title: `${title} — AWLEL`, description, url: `/${slug}` },
+    openGraph: { title: `${title} — AWLEL`, description, url: `/${slug}`, images: DEFAULT_OG_IMAGE },
   };
 }

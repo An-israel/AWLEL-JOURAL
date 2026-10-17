@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { Suspense } from "react";
+import { ArticleStats } from "@/components/catalog/article-stats";
 import { authorLine } from "@/components/catalog/author-names";
 import { Breadcrumbs } from "@/components/catalog/breadcrumbs";
 import { CategoryTag } from "@/components/catalog/category-tag";
@@ -12,6 +13,8 @@ import { pageRange } from "@/components/catalog/page-range";
 import { PdfPreview } from "@/components/catalog/pdf-preview";
 import { RichText } from "@/components/catalog/rich-text";
 import { ShareLinks } from "@/components/catalog/share-links";
+import { JsonLd } from "@/components/seo/json-ld";
+import { MetaTags } from "@/components/seo/meta-tags";
 import {
   formatApa,
   formatBibtex,
@@ -32,6 +35,8 @@ import { getSiteSettings } from "@/lib/data/site-settings";
 import { siteUrl } from "@/lib/env.public";
 import { issueFileStem } from "@/lib/issue-label";
 import { richTextToPlain } from "@/lib/sanitize";
+import { scholarlyArticleLd } from "@/lib/seo/json-ld";
+import { dublinCoreTags, scholarTags, type ScholarlyArticleMeta } from "@/lib/seo/scholarly-meta";
 import { articleDownloadPath } from "@/lib/storage";
 
 type Props = PageProps<"/articles/[slug]">;
@@ -63,6 +68,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       authors: article.authors.map((a) => a.fullName),
       tags: article.keywords,
     },
+    twitter: { card: "summary_large_image", title: article.title, description },
   };
 }
 
@@ -149,12 +155,68 @@ async function ArticleContent({ params }: { params: Props["params"] }) {
   const pages = pageRange(article.firstPage, article.lastPage);
   const fromIssue = issueArticles.filter((a) => a.id !== article.id).slice(0, 5);
   const inCategory = (categoryData?.articles ?? []).filter((a) => a.id !== article.id).slice(0, 5);
+  const url = `${siteUrl}/articles/${article.slug}`;
+  const pdfUrl = article.hasPdf ? `${siteUrl}${articleDownloadPath(article.id, "pdf")}` : null;
+  const abstract = richTextToPlain(article.abstract);
+  const scholarly: ScholarlyArticleMeta = {
+    title: article.title,
+    authors: article.authors,
+    publishedAt: article.publishedAt,
+    year: article.issue.year,
+    journal: settings.journalName,
+    journalAbbrev: settings.shortName,
+    issn: settings.issn,
+    publisher: settings.publisher,
+    volume: article.issue.volumeNumber,
+    issue: input.issue ?? null,
+    firstPage: article.firstPage,
+    lastPage: article.lastPage,
+    doi: article.doi,
+    keywords: article.keywords,
+    abstract,
+    url,
+    pdfUrl,
+    docxUrl: article.hasDocx ? `${siteUrl}${articleDownloadPath(article.id, "docx")}` : null,
+  };
+  const structured = scholarlyArticleLd(
+    {
+      name: settings.journalName,
+      shortName: settings.shortName,
+      issn: settings.issn,
+      publisher: settings.publisher,
+      url: siteUrl,
+    },
+    {
+      volume: article.issue.volumeNumber,
+      issue: input.issue ?? null,
+      year: article.issue.year,
+      label: article.issue.label,
+      url: `${siteUrl}${article.issue.path}`,
+      datePublished: article.issue.publishedAt,
+    },
+    {
+      title: article.title,
+      url,
+      abstract,
+      keywords: article.keywords,
+      authors: article.authors,
+      datePublished: article.publishedAt,
+      dateModified: article.updatedAt,
+      firstPage: article.firstPage,
+      lastPage: article.lastPage,
+      doi: article.doi,
+      pdfUrl,
+    },
+  );
   const affiliations = [
     ...new Set(article.authors.map((a) => a.affiliation).filter((a): a is string => Boolean(a))),
   ];
 
   return (
     <article>
+      <MetaTags tags={[...scholarTags(scholarly), ...dublinCoreTags(scholarly)]} />
+      <link rel="schema.DC" href="http://purl.org/dc/elements/1.1/" />
+      <JsonLd data={structured} />
       <header className="bg-white">
         <div className="mx-auto max-w-site px-4 pt-8 pb-12 sm:px-6 lg:px-8">
           <Breadcrumbs
@@ -313,18 +375,11 @@ async function ArticleContent({ params }: { params: Props["params"] }) {
                 </p>
               )}
             </div>
-            <p className="mt-4 flex gap-4 text-sm text-ink-muted">
-              <span>
-                <strong className="font-semibold text-ink">{article.viewCount.toLocaleString("en")}</strong>{" "}
-                views
-              </span>
-              <span>
-                <strong className="font-semibold text-ink">
-                  {article.downloadCount.toLocaleString("en")}
-                </strong>{" "}
-                downloads
-              </span>
-            </p>
+            <ArticleStats
+              articleId={article.id}
+              views={article.viewCount}
+              downloads={article.downloadCount}
+            />
           </section>
           <CitePanel
             apa={formatApa(input)}
@@ -333,7 +388,7 @@ async function ArticleContent({ params }: { params: Props["params"] }) {
             ris={formatRis(input)}
             risFileName={risFileName}
           />
-          <ShareLinks url={`${siteUrl}/articles/${article.slug}`} title={article.title} />
+          <ShareLinks url={url} title={article.title} />
         </aside>
       </div>
     </article>

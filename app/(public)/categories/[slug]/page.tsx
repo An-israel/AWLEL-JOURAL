@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { DEFAULT_OG_IMAGE } from "@/lib/site";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -24,7 +25,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title: data.category.name,
     description,
     alternates: { canonical: `/categories/${slug}` },
-    openGraph: { title: `${data.category.name} — AWLEL`, description, url: `/categories/${slug}` },
+    openGraph: {
+      title: `${data.category.name} — AWLEL`,
+      description,
+      url: `/categories/${slug}`,
+      images: DEFAULT_OG_IMAGE,
+    },
   };
 }
 

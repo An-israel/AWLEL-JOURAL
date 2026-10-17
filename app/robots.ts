@@ -7,7 +7,14 @@ export default function robots(): MetadataRoute.Robots {
     return { rules: { userAgent: "*", disallow: "/" } };
   }
   return {
-    rules: [{ userAgent: "*", allow: "/", disallow: ["/admin", "/account", "/api/", "/login", "/submit"] }],
+    rules: [
+      {
+        userAgent: "*",
+        // Article PDFs are linked from citation_pdf_url, so Google Scholar must reach them.
+        allow: ["/", "/api/download/"],
+        disallow: ["/admin", "/account", "/api/", "/login", "/submit"],
+      },
+    ],
     sitemap: `${siteUrl}/sitemap.xml`,
     host: siteUrl,
   };

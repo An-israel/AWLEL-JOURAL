@@ -18,7 +18,7 @@ through a Postgres job queue drained by cron. There are no other services.
 
 | #   | Item              | Status     | Where                                                         | State | Notes |
 | --- | ----------------- | ---------- | ------------------------------------------------------------- | ----- | ----- |
-| 1   | Rate limiting     | BUILD      | `lib/server/rate-limit.ts`, `check_rate_limit()` in migration 3 | 🟡 M1 | Postgres fixed-window limiter (no extra vendor). Returns 429 + `Retry-After` via `apiRoute`. Applied so far to login, sign-up and password reset (per IP and per account) and the contact form, and manuscript submission (per account); download (M7) follows. Keys are HMAC-hashed; never raw IPs. Fails open if the DB is down. |
+| 1   | Rate limiting     | BUILD      | `lib/server/rate-limit.ts`, `check_rate_limit()` in migration 3 | 🟡 M1 | Postgres fixed-window limiter (no extra vendor). Returns 429 + `Retry-After` via `apiRoute`. Applied so far to login, sign-up and password reset (per IP and per account) and the contact form, manuscript submission (per account), downloads (120/min per IP) and the view counter (M7). Keys are HMAC-hashed; never raw IPs. Fails open if the DB is down. |
 | 2   | Caching           | BUILD      | `next.config.ts` (`cacheComponents`), `lib/data/*`             | 🟡 M1 | Public pages are static shells with `"use cache"` data tagged by entity (`lib/data/tags.ts`). Next 16 replaces `unstable_cache` with `"use cache"` + `cacheTag`; same behaviour. API `Cache-Control` set per route. |
 | 3   | Load balancing    | PLATFORM   | Vercel                                                        | ✅    | Vercel routes each request to healthy function instances. |
 | 4   | Reverse proxies   | PLATFORM   | Vercel edge network                                           | ✅    | TLS termination, compression, HTTP/2+3 and routing happen at Vercel's edge before our code runs. |
@@ -58,11 +58,11 @@ through a Postgres job queue drained by cron. There are no other services.
 | 28  | Connection pooling   | PLATFORM   | Supabase Supavisor                      | ✅    | The app talks to Supabase over HTTPS (PostgREST), which pools internally. Scripts use the pooled URL (port 6543) in `SUPABASE_DB_URL`. |
 | 29  | Read replicas        | NOT NEEDED | —                                       | ✅    | Reads are mostly served from the CDN cache. Supabase offers replicas if DB CPU stays above ~70%. |
 | 30  | Sharding             | NOT NEEDED | —                                       | ✅    | Thousands of articles, not billions of rows. Never likely for a journal. |
-| 31  | Partitioning         | BUILD (alternative) | `metrics_daily`, retention job | 🟡 M1 | Agreed alternative to partitions: daily rollup table + 13-month raw retention (cron in M8). Revisit partitioning if `metrics_events` passes ~50M rows. |
+| 31  | Partitioning         | BUILD (alternative) | `metrics_daily`, `rollup_metrics()` (migration 9) | 🟡 M7 | Agreed alternative to partitions: daily rollup table + 13-month raw retention. `rollup_metrics()` is idempotent and deletes only raw days already rolled up; the daily cron that calls it arrives in M8 (until then charts read raw events, which is correct, just less compact). Revisit partitioning if `metrics_events` passes ~50M rows. |
 | 32  | Replication          | PLATFORM   | Supabase                                | ✅    | Managed by Supabase (physical backups/WAL). |
 | 33  | Leader election      | NOT NEEDED | —                                       | ✅    | Cron jobs take a Postgres advisory lock so only one run proceeds (item 38). |
 | 34  | CAP theorem          | DOC        | this file                               | ✅    | Single-region Postgres: we choose consistency. If the DB is unreachable, writes fail clearly while cached public pages keep serving. |
-| 35  | Eventual consistency | DOC        | this file                               | 🟡    | View/download counters lag up to one rollup interval; public pages update within seconds of publishing (tag revalidation), worst case at the next revalidation window. Measured in M8. |
+| 35  | Eventual consistency | DOC        | this file                               | 🟡    | Article view/download counters update in the same transaction as the event. Article pages are cached, so the counts in their HTML can be up to a day old, but the page replaces them with live counts as soon as it loads (the view call returns them). Home "most read" lists refresh hourly. Dashboard charts are live. Public pages update within seconds of publishing (tag revalidation). |
 | 36  | Optimistic locking   | BUILD      | `version` columns, `bump_version()`, `components/admin/conflict-banner.tsx` | ✅ M5 | Every admin save sends the version it loaded; a stale save changes nothing and shows “Someone else edited this. Reload…”. Covered by an end-to-end test. |
 | 37  | Pessimistic locking  | BUILD      | job claim RPC                           | ⏳ M8 | `SELECT … FOR UPDATE SKIP LOCKED`. |
 | 38  | Distributed locks    | BUILD      | advisory locks                          | 🟡 M5 | Last-Super-Admin check and issue publishing (`set_issue_status`) take advisory locks; cron jobs follow in M8. |
@@ -73,7 +73,7 @@ through a Postgres job queue drained by cron. There are no other services.
 
 | #   | Item               | Status | Where        | State | Notes |
 | --- | ------------------ | ------ | ------------ | ----- | ----- |
-| 41  | Memory leaks       | BUILD  | download/upload paths | 🟡 M1 | No module-level mutable state (cached data lives in Next's cache, not globals). Files never pass through functions: uploads use signed upload URLs, downloads redirect to signed URLs. |
+| 41  | Memory leaks       | BUILD  | download/upload paths | 🟡 M1 | No module-level mutable state (cached data lives in Next's cache, not globals). Files never pass through functions: uploads use signed upload URLs, downloads redirect to one-minute signed URLs (M7), so file bytes never pass through a function. |
 | 42  | Garbage collection | DOC    | this file    | ✅    | Covered by 41: no large in-memory objects in request paths. |
 | 43  | Thread safety      | DOC    | this file    | ✅    | Each function instance is single-threaded, but many run concurrently; all shared state is in Postgres. |
 | 44  | Backpressure       | BUILD  | `bulk-uploader.tsx`, queue | 🟡 M5 | Bulk upload runs at most 3 uploads at once with a visible per-file queue; one article's files go one after another. Queue batches in M8. |
@@ -87,7 +87,7 @@ through a Postgres job queue drained by cron. There are no other services.
 | 47  | Vertical scaling   | PLATFORM | Supabase     | ✅    | Dashboard → Project Settings → Compute and Disk; upgrade the compute add-on (minutes of downtime). |
 | 48  | CDN                | PLATFORM | Vercel, Supabase Storage CDN | ✅ | |
 | 49  | Edge caching       | BUILD    | route config, headers | 🟡 M1 | Static pages get `s-maxage` + `stale-while-revalidate` from Next (verified: home `s-maxage=86400`). Files/images headers in M7. |
-| 50  | Cache invalidation | BUILD    | `lib/admin/revalidate.ts` | ✅ M5 | Every admin mutation calls `updateTag` for the tags it affects (issues, articles, the specific issue/article, categories, pages, board, settings, flags). End-to-end tests check that published changes are live immediately. |
+| 50  | Cache invalidation | BUILD    | `lib/admin/revalidate.ts` | ✅ M5 | Every admin mutation calls `updateTag` for the tags it affects (issues, articles, the specific issue/article, categories, pages, board, settings, flags). End-to-end tests check that published changes are live immediately. M7: `sitemap.xml`, `feed.xml` and the OG images read the same tagged loaders, so they refresh with the pages. |
 
 ## Releases
 
@@ -108,7 +108,7 @@ through a Postgres job queue drained by cron. There are no other services.
 | 58  | Monitoring    | BUILD  | `app/layout.tsx`                     | 🟡 M1 | Vercel Analytics + Speed Insights installed. External uptime monitor setup documented in M8. |
 | 59  | Logging       | BUILD  | `lib/server/logger.ts`               | ✅ M1 | pino JSON; request id on every API log line; redaction of passwords, tokens, cookies, emails; file contents never logged. |
 | 60  | Tracing       | BUILD  | `instrumentation.ts`                 | ✅ M1 | Sentry when `SENTRY_DSN` is set, otherwise `@vercel/otel`. Sentry source-map upload can be added with a `SENTRY_AUTH_TOKEN` later. |
-| 61  | Metrics       | BUILD  | —                                    | ⏳ M7/M8 | |
+| 61  | Metrics       | BUILD  | —                                    | 🟡 M7 | Business metrics (section 9) live: views and downloads per article and issue in `metrics_events`, counted once per visitor per day with a daily-rotating keyed hash of IP + user agent (no cookies, no personal data); bots dropped by user agent (`lib/metrics/bots.ts`). Dashboard: daily chart, top 10, submissions by status. Request latency, error rate and queue metrics in M8. |
 | 62  | Alerts        | BUILD  | —                                    | ⏳ M8 | |
 | 63  | SLOs          | DOC    | below                                | ✅    | 99.5% monthly availability; p95 public page load < 2.5s; p95 download start < 1s. |
 | 64  | SLIs          | DOC    | —                                    | ⏳ M8 | |

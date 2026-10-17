@@ -7,7 +7,11 @@ import { Breadcrumbs } from "@/components/catalog/breadcrumbs";
 import { DownloadLinks } from "@/components/catalog/download-links";
 import { IssueCover } from "@/components/catalog/issue-cover";
 import { RichText } from "@/components/catalog/rich-text";
+import { JsonLd } from "@/components/seo/json-ld";
 import { getIssue, getPublishedIssues } from "@/lib/data/catalog";
+import { getSiteSettings } from "@/lib/data/site-settings";
+import { siteUrl } from "@/lib/env.public";
+import { issueLd } from "@/lib/seo/json-ld";
 import { issueDownloadPath } from "@/lib/storage";
 
 type Props = PageProps<"/issues/[volume]/[issue]">;
@@ -39,17 +43,38 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     description,
     alternates: { canonical: issue.path },
     openGraph: { title: `AWLEL ${issue.label}`, description, url: issue.path },
+    twitter: { card: "summary_large_image", title: `AWLEL ${issue.label}`, description },
   };
 }
 
 const dateFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
 async function IssueContent({ params }: { params: Props["params"] }) {
-  const issue = await load(params);
+  const [issue, settings] = await Promise.all([load(params), getSiteSettings()]);
   if (!issue) notFound();
+  const structured = issueLd(
+    {
+      name: settings.journalName,
+      shortName: settings.shortName,
+      issn: settings.issn,
+      publisher: settings.publisher,
+      url: siteUrl,
+    },
+    {
+      volume: issue.volumeNumber,
+      issue: issue.issuesInVolume > 1 ? issue.issueNumber : null,
+      year: issue.year,
+      label: issue.label,
+      url: `${siteUrl}${issue.path}`,
+      datePublished: issue.publishedAt,
+      imageUrl: issue.coverUrl,
+    },
+    issue.articles.map((a) => ({ title: a.title, url: `${siteUrl}/articles/${a.slug}` })),
+  );
 
   return (
     <>
+      <JsonLd data={structured} />
       <div className="bg-white">
         <div className="mx-auto max-w-site px-4 pt-8 pb-14 sm:px-6 lg:px-8">
           <Breadcrumbs

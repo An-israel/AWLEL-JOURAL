@@ -18,6 +18,9 @@
   --paper: #f7f7f8;
   --white: #ffffff;
   --line: #e4e4e7;
+  /* Chart series (validated for colour-blind separation and 3:1 contrast on white). */
+  --chart-views: #2e66e8;
+  --chart-downloads: #b07a22;
 }
 
 @theme inline {
@@ -34,6 +37,8 @@
   --color-paper: var(--paper);
   --color-white: var(--white);
   --color-line: var(--line);
+  --color-chart-views: var(--chart-views);
+  --color-chart-downloads: var(--chart-downloads);
 
   --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
   --font-serif: var(--font-source-serif), ui-serif, Georgia, serif;

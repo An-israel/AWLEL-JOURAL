@@ -37,9 +37,12 @@ async function Content({ searchParams }: { searchParams: Props["searchParams"] }
 
   let query = supabase
     .from("articles")
-    .select("id, title, status, updated_at, issue_id, deleted_at, category:categories(name)", {
-      count: "exact",
-    })
+    .select(
+      "id, title, status, updated_at, issue_id, deleted_at, view_count, download_pdf_count, download_docx_count, category:categories(name)",
+      {
+        count: "exact",
+      },
+    )
     .order("updated_at", { ascending: false })
     .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
   query = f.status === "trash" ? query.not("deleted_at", "is", null) : query.is("deleted_at", null);
@@ -125,6 +128,10 @@ async function Content({ searchParams }: { searchParams: Props["searchParams"] }
               <Th className="hidden md:table-cell">Issue</Th>
               <Th className="hidden lg:table-cell">Category</Th>
               <Th>Status</Th>
+              <Th className="hidden text-right xl:table-cell">Views</Th>
+              <Th className="hidden text-right xl:table-cell" title="PDF + Word">
+                Downloads
+              </Th>
               <Th className="hidden md:table-cell">Updated</Th>
             </tr>
           </THead>
@@ -146,6 +153,15 @@ async function Content({ searchParams }: { searchParams: Props["searchParams"] }
                   ) : (
                     <Badge variant="gold">Draft</Badge>
                   )}
+                </Td>
+                <Td className="hidden text-right tabular-nums xl:table-cell">
+                  {a.view_count.toLocaleString("en")}
+                </Td>
+                <Td
+                  className="hidden text-right tabular-nums xl:table-cell"
+                  title={`${a.download_pdf_count} PDF · ${a.download_docx_count} Word`}
+                >
+                  {(a.download_pdf_count + a.download_docx_count).toLocaleString("en")}
                 </Td>
                 <Td className="hidden text-ink-muted md:table-cell">{date.format(new Date(a.updated_at))}</Td>
               </Tr>

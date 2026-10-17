@@ -433,3 +433,40 @@ export async function getArticlesByIds(ids: string[]): Promise<ArticleSummary[]>
   const byId = new Map(summaries.map((s) => [s.id, s]));
   return ids.map((id) => byId.get(id)).filter((s): s is ArticleSummary => Boolean(s));
 }
+
+// ---------------------------------------------------------------------------
+// Discovery (sitemap, RSS)
+// ---------------------------------------------------------------------------
+
+export interface SitemapArticle {
+  slug: string;
+  updatedAt: string;
+}
+
+/** Every published article's URL and last change, for sitemap.xml. */
+export async function getSitemapArticles(): Promise<SitemapArticle[]> {
+  "use cache";
+  cacheTag(TAGS.articles);
+  const { data, error } = await createSupabasePublicClient()
+    .from("articles")
+    .select("slug, updated_at")
+    .order("published_at", { ascending: false });
+  if (error) return degrade("sitemap articles", error, []);
+  cacheLife("days");
+  return (data ?? []).map((r) => ({ slug: r.slug, updatedAt: r.updated_at }));
+}
+
+/** The newest published articles, for the RSS feed. */
+export async function getLatestArticles(limit = 30): Promise<ArticleSummary[]> {
+  "use cache";
+  cacheTag(TAGS.articles);
+  const { data, error } = await createSupabasePublicClient()
+    .from("articles")
+    .select(ARTICLE_COLUMNS)
+    .order("published_at", { ascending: false })
+    .order("sort_order")
+    .limit(limit);
+  if (error) return degrade("latest articles", error, []);
+  cacheLife("days");
+  return toSummaries((data ?? []) as ArticleRow[]);
+}

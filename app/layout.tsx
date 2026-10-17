@@ -45,6 +45,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${poppins.variable} ${sourceSerif.variable} antialiased`}>
+      <head>
+        <link rel="alternate" type="application/rss+xml" title="AWLEL: latest articles" href="/feed.xml" />
+      </head>
       <body className="flex min-h-dvh flex-col">
         {children}
         {/* These scripts are served by Vercel only; skip them when self-hosted. */}

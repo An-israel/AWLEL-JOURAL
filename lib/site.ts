@@ -37,3 +37,9 @@ export const FOOTER_LINKS: readonly NavItem[] = [
   { href: "/about", label: "About the Journal" },
   { href: "/privacy", label: "Privacy" },
 ];
+
+/**
+ * The site-wide sharing image (app/opengraph-image.tsx). Pages that set their
+ * own `openGraph` replace the inherited one, so they name it explicitly.
+ */
+export const DEFAULT_OG_IMAGE = "/opengraph-image";

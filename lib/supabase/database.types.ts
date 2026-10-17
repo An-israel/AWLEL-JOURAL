@@ -1477,6 +1477,31 @@ export type Database = {
       is_staff: { Args: Record<PropertyKey, never>; Returns: boolean };
       is_submission_author: { Args: { p_submission_id: string }; Returns: boolean };
       is_super_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
+      metrics_timeseries: {
+        Args: { p_article_id?: string; p_from: string; p_to: string };
+        Returns: {
+          day: string;
+          downloads: number;
+          views: number;
+        }[];
+      };
+      metrics_top_articles: {
+        Args: { p_from: string; p_limit?: number; p_to: string };
+        Returns: {
+          article_id: string;
+          downloads: number;
+          views: number;
+        }[];
+      };
+      record_metric_event: {
+        Args: {
+          p_article_id?: string;
+          p_event_type: Database["public"]["Enums"]["metrics_event_type"];
+          p_issue_id?: string;
+          p_session_hash: string;
+        };
+        Returns: boolean;
+      };
       reorder_rows: { Args: { p_ids: string[]; p_table: string }; Returns: undefined };
       reviewer_queue: {
         Args: Record<PropertyKey, never>;
@@ -1497,6 +1522,7 @@ export type Database = {
           title: string;
         }[];
       };
+      rollup_metrics: { Args: Record<PropertyKey, never>; Returns: number };
       row_changed: { Args: { ignored: string[]; new_row: Json; old_row: Json }; Returns: boolean };
       save_article: {
         Args: { p_authors: Json; p_data: Json; p_expected_version: number; p_id: string };

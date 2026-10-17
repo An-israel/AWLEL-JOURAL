@@ -149,6 +149,102 @@ test.describe("editor content workflows", () => {
     expect(data?.[1].pdf_file_id).not.toBeNull();
   });
 
+  test("reads and downloads are counted, tagged for Scholar and shown on the dashboard", async ({
+    page,
+    browser,
+  }) => {
+    const volume = freshVolume();
+    const issueId = await newDraftIssue(page, volume);
+    await page.getByRole("link", { name: "New article" }).click();
+    const title = `Counting Readers ${volume}`;
+    await page.getByLabel("Title", { exact: true }).fill(title);
+    await page.getByLabel("First page").fill("5");
+    await page.getByLabel("Last page").fill("20");
+    await page.locator("#a-abstract").click();
+    await page.keyboard.type("How readers are counted.");
+    await page.getByLabel("Name", { exact: true }).fill("Ada Ọkafọ");
+    await page.getByLabel("Affiliation", { exact: true }).fill("University of Nigeria, Nsukka");
+    await page.getByRole("button", { name: "Create draft article" }).click();
+    await expect(page).toHaveURL(/\/admin\/articles\/[0-9a-f-]{36}$/);
+    const articleId = page.url().split("/").pop()!;
+    await page.getByLabel("Choose article pdf").setInputFiles(fixture("Testauthor_article.pdf"));
+    await expect(page.getByText("Article PDF uploaded.")).toBeVisible();
+    await page.getByRole("button", { name: "Publish article" }).click();
+    await expect(page.getByText(/It will appear when its issue is published/)).toBeVisible();
+    await page.goto(`/admin/issues/${issueId}`);
+    await page.getByRole("button", { name: "Publish issue" }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Publish" }).click();
+    await expect(page.getByText("Issue published.", { exact: false })).toBeVisible();
+
+    // A reader in an ordinary browser (the default headless user agent counts as a bot).
+    const reader = await browser.newContext({
+      userAgent:
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+    });
+    const tab = await reader.newPage();
+    await tab.goto(`/issues/${volume}/1`);
+    const counted = tab.waitForResponse("**/api/metrics/view");
+    await tab.getByRole("link", { name: title }).click();
+    await expect(tab.getByRole("heading", { level: 1 })).toHaveText(title);
+    await counted;
+    await expect(tab.getByTestId("article-stats")).toHaveText("1 view0 downloads");
+
+    // Scholar and Dublin Core tags, in the head, with the PDF route.
+    const head = tab.locator("head");
+    await expect(head.locator('meta[name="citation_title"]')).toHaveAttribute("content", title);
+    await expect(head.locator('meta[name="citation_author"]')).toHaveAttribute("content", "Ada Ọkafọ");
+    await expect(head.locator('meta[name="citation_firstpage"]')).toHaveAttribute("content", "5");
+    await expect(head.locator('meta[name="citation_pdf_url"]')).toHaveAttribute(
+      "content",
+      new RegExp(`/api/download/article/${articleId}\\?format=pdf$`),
+    );
+    await expect(head.locator('meta[name="DC.creator"]')).toHaveAttribute("content", "Ada Ọkafọ");
+    const ld = (
+      await tab
+        .locator('script[type="application/ld+json"]')
+        .evaluateAll((els) => els.map((el) => JSON.parse(el.textContent ?? "{}")))
+    ).find((d) => d["@type"] === "ScholarlyArticle");
+    expect(ld).toMatchObject({ "@type": "ScholarlyArticle", name: title, pageStart: "5", pageEnd: "20" });
+
+    // Download: a clean file name, counted once per reader per day.
+    const download = tab.waitForEvent("download");
+    await tab.getByRole("link", { name: /Download PDF/ }).click();
+    expect((await download).suggestedFilename()).toBe(`AWLEL_Vol${volume}_Okafo_2099.pdf`);
+    await tab.request.get(`/api/download/article/${articleId}?format=pdf`, { maxRedirects: 0 });
+    // Bots are not counted, and a missing format is a 404 rather than a broken link.
+    const bot = await tab.request.get(`/api/download/article/${articleId}?format=pdf`, {
+      maxRedirects: 0,
+      headers: { "user-agent": "Googlebot/2.1 (+http://www.google.com/bot.html)" },
+    });
+    expect(bot.status()).toBe(302);
+    const missing = await tab.request.get(`/api/download/article/${articleId}?format=docx`, {
+      maxRedirects: 0,
+    });
+    expect(missing.status()).toBe(404);
+    await tab.reload();
+    await expect(tab.getByTestId("article-stats")).toHaveText("1 view1 download");
+    await reader.close();
+
+    const { data: counts } = await adminClient()
+      .from("articles")
+      .select("view_count, download_pdf_count")
+      .eq("id", articleId)
+      .single();
+    expect(counts).toEqual({ view_count: 1, download_pdf_count: 1 });
+
+    // Discovery files list it straight away.
+    expect(await (await page.request.get("/sitemap.xml")).text()).toContain(
+      `/articles/counting-readers-${volume}`,
+    );
+    expect(await (await page.request.get("/feed.xml")).text()).toContain(`<title>${title}</title>`);
+
+    // The dashboard shows the reads.
+    await page.goto("/admin?range=7");
+    await expect(page.getByRole("img", { name: /Views and downloads per day/ })).toBeVisible();
+    const top = page.getByRole("region", { name: /Top 10 articles/ });
+    await expect(top.getByRole("listitem").filter({ hasText: title })).toContainText("1 view · 1 download");
+  });
+
   test("a stale edit is refused with a clear message", async ({ page }) => {
     const issueId = await newDraftIssue(page, freshVolume());
     // Someone else saves the issue in the meantime.

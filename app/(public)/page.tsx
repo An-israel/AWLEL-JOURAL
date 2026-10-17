@@ -4,6 +4,7 @@ import { ArticleRow } from "@/components/catalog/article-row";
 import { authorLine } from "@/components/catalog/author-names";
 import { IssueCover } from "@/components/catalog/issue-cover";
 import { SectionHeading } from "@/components/catalog/section-heading";
+import { JsonLd } from "@/components/seo/json-ld";
 import {
   getCategoriesWithCounts,
   getIssueArticles,
@@ -13,6 +14,8 @@ import {
 } from "@/lib/data/catalog";
 import { getFeatureFlags } from "@/lib/data/feature-flags";
 import { getSiteSettings } from "@/lib/data/site-settings";
+import { siteUrl } from "@/lib/env.public";
+import { periodicalLd } from "@/lib/seo/json-ld";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/" },
@@ -35,6 +38,17 @@ export default async function HomePage() {
 
   return (
     <>
+      <JsonLd
+        data={periodicalLd({
+          name: settings.journalName,
+          shortName: settings.shortName,
+          issn: settings.issn,
+          publisher: settings.publisher,
+          url: siteUrl,
+          description: settings.subtitle,
+          logoUrl: settings.logoUrl,
+        })}
+      />
       {/* Hero ------------------------------------------------------------ */}
       <section className="relative overflow-hidden bg-white" aria-labelledby="hero-title">
         <div

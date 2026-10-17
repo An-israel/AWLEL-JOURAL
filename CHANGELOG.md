@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The project follows
 
 ## [Unreleased]
 
+### Added — Milestone 7: Downloads, analytics and SEO
+
+- Download routes `/api/download/article/[id]` and `/api/download/issue/[id]` (`?format=pdf|docx`): check
+  the item is published, record the download, then redirect to a one-minute signed link with a clean file
+  name such as `AWLEL_Vol25_Issue1_Okeke_2025.pdf` or `AWLEL_Vol25_Issue1_Full_Issue.pdf`. Rate limited;
+  a missing format returns 404 (and its button is hidden).
+- Analytics: article views (recorded by the page once it loads) and downloads by format, counted once per
+  visitor per day with no cookies and no personal data; bots left out. Article pages show live counts.
+- Admin dashboard: views and downloads chart (7 days, 30 days, 90 days or 12 months) with hover and
+  keyboard read-out and a table view, top 10 articles, submissions by status. Article list shows views
+  and downloads.
+- Google Scholar `citation_*` tags and Dublin Core tags on article pages; JSON-LD `ScholarlyArticle`,
+  `PublicationIssue`/`PublicationVolume` and `Periodical`; Twitter cards; generated brand-style sharing
+  images for articles, issues and the site (or the default image uploaded in Settings).
+- `sitemap.xml` with every published issue, article and category; RSS feed at `/feed.xml`; `robots.txt`
+  lets crawlers reach article PDFs.
+- Database: `record_metric_event`, `rollup_metrics` (daily rollup, 13-month raw retention),
+  `metrics_timeseries` and `metrics_top_articles` (migration 9, with rollback) and pgTAP tests.
+- Tests: unit tests for Scholar tags, JSON-LD, bot detection and file names; an end-to-end test from
+  publishing through reading, downloading, the tags, the sitemap, the feed and the dashboard.
+
 ### Added — Milestone 6: Submissions and peer review
 
 - Submit a manuscript (signed-in authors): title, abstract, keywords, subject area, citation style,
