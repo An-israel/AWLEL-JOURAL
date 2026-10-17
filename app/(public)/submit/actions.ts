@@ -132,14 +132,12 @@ export async function finalizeSubmission(submissionId: string): Promise<ActionRe
     .eq("event_type", "submission.created")
     .eq("aggregate_id", submissionId);
   if (!announced) {
-    await admin
-      .from("domain_events")
-      .insert({
-        event_type: "submission.created",
-        aggregate_type: "submission",
-        aggregate_id: submissionId,
-        actor_id: user.id,
-      });
+    await admin.from("domain_events").insert({
+      event_type: "submission.created",
+      aggregate_type: "submission",
+      aggregate_id: submissionId,
+      actor_id: user.id,
+    });
     await notifySubmissionReceived({
       id: sub.id,
       title: sub.title,
