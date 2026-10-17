@@ -18,7 +18,7 @@ through a Postgres job queue drained by cron. There are no other services.
 
 | #   | Item              | Status     | Where                                                         | State | Notes |
 | --- | ----------------- | ---------- | ------------------------------------------------------------- | ----- | ----- |
-| 1   | Rate limiting     | BUILD      | `lib/server/rate-limit.ts`, `check_rate_limit()` in migration 3 | 🟡 M1 | Postgres fixed-window limiter (no extra vendor). Returns 429 + `Retry-After` via `apiRoute`. Applied to each endpoint as it is built (login, signup, reset M4; contact M3; submission M6; download M7). Keys are HMAC-hashed; never raw IPs. Fails open if the DB is down. |
+| 1   | Rate limiting     | BUILD      | `lib/server/rate-limit.ts`, `check_rate_limit()` in migration 3 | 🟡 M1 | Postgres fixed-window limiter (no extra vendor). Returns 429 + `Retry-After` via `apiRoute`. Applied so far to login, sign-up and password reset (per IP and per account) and the contact form; submission (M6) and download (M7) follow. Keys are HMAC-hashed; never raw IPs. Fails open if the DB is down. |
 | 2   | Caching           | BUILD      | `next.config.ts` (`cacheComponents`), `lib/data/*`             | 🟡 M1 | Public pages are static shells with `"use cache"` data tagged by entity (`lib/data/tags.ts`). Next 16 replaces `unstable_cache` with `"use cache"` + `cacheTag`; same behaviour. API `Cache-Control` set per route. |
 | 3   | Load balancing    | PLATFORM   | Vercel                                                        | ✅    | Vercel routes each request to healthy function instances. |
 | 4   | Reverse proxies   | PLATFORM   | Vercel edge network                                           | ✅    | TLS termination, compression, HTTP/2+3 and routing happen at Vercel's edge before our code runs. |
@@ -121,7 +121,7 @@ through a Postgres job queue drained by cron. There are no other services.
 | --- | --------------------- | -------- | ---------------------------------------- | ----- | ----- |
 | 67  | Secrets management    | BUILD    | `.env.example`, `lib/env.*.ts`           | ✅ M1 | Secrets only in Vercel/GitHub env settings. Server secrets live in `lib/env.server.ts`, which imports `server-only`, so a client import fails the build. Rotation: see below. |
 | 68  | IAM                   | BUILD    | migration 4, `lib/supabase/admin.ts`     | ✅ M1 | Roles in `profiles`; RLS on every table; 28 pgTAP tests. Service-role client only in server files. |
-| 69  | OAuth                 | BUILD    | `supabase/config.toml`, login page       | 🟡 M1 | Google provider configured (disabled until client id/secret are set); button in M4 behind the `google_sign_in` flag. |
+| 69  | OAuth                 | BUILD    | `supabase/config.toml`, login page       | ✅ M4 | Google provider in `supabase/config.toml` (off until a client id/secret is set); the button and action are behind the `google_sign_in` feature flag. |
 | 70  | JWT rotation          | PLATFORM | Supabase Auth, `proxy.ts`                | ✅    | 1h access tokens, rotating refresh tokens (`enable_refresh_token_rotation`). Proxy refreshes sessions with `getUser()`. Signing keys: Dashboard → Project Settings → JWT Keys → rotate. |
 | 71  | TLS                   | PLATFORM | Vercel; `Strict-Transport-Security`      | ✅    | HTTPS only; HSTS 2 years with preload. |
 | 72  | Encryption at rest    | PLATFORM | Supabase                                 | ✅    | AES-256 for database and storage. |

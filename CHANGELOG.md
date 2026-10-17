@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The project follows
 
 ## [Unreleased]
 
+### Added — Milestone 4: Auth and roles
+
+- Sign in, author self-registration, forgot / reset password, sign out, and the `/auth/callback` route that
+  completes confirmation, invitation, password-reset and Google sign-in links. "Sign in with Google" is
+  behind the `google_sign_in` feature flag.
+- Login, sign-up and password-reset requests are rate limited per IP and per account; error messages
+  don't reveal whether an account exists; `?next=` only accepts same-site paths.
+- Data access layer (`lib/auth.ts`) used by every protected page and server action; role-gated admin area
+  (`/admin`) with a navy sidebar filtered by role, breadcrumbs, toasts and confirmation dialogs
+  (shadcn/ui-style components on Radix, restyled to AWLEL).
+- Users and Roles (Super Admin): search and filter, invite by email with a role, change role, deactivate
+  and reactivate (also blocks the account in Supabase Auth). The last active Super Admin can't be demoted
+  or deactivated; role changes are audit-logged with the acting admin.
+- Admin dashboard with headline counts and recent activity; "My profile" (name, affiliation, ORCID,
+  password); author account page at `/account`; 403 page.
+- End-to-end tests: registration, wrong password, role-based redirects, Super Admin changes a role, last
+  Super Admin protection, deactivation, invitations, editors blocked from Users and Roles.
+
 ### Added — Milestone 3: Static pages
 
 - Scope (with live links to every subject area), Submission Guidelines (house structure, citation rules,

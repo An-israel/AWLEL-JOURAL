@@ -72,7 +72,9 @@ sample issue (Volume 26) from the admin before launch.
    Skip the "SAMPLE CONTENT" section if you don't want the sample issue in production.
 4. **Auth → URL configuration:** set _Site URL_ to `https://awlel.unn.edu.ng` and add
    `https://awlel.unn.edu.ng/auth/callback` and `https://*.vercel.app/auth/callback` to the redirect URLs.
-5. **Auth → Providers:** keep _Email_ enabled. Optionally enable _Google_ (item 69 in the engineering doc).
+5. **Auth → Providers:** keep _Email_ enabled with **Confirm email** switched on (local development has it off).
+   Optionally enable _Google_, then turn on the `google_sign_in` feature flag.
+   **Auth → Email templates:** keep the default links; they all return through `/auth/callback`.
 6. **Auth → SMTP:** use Resend's SMTP credentials so sign-up and password emails come from the journal's
    domain.
 7. Storage buckets (`issue-covers`, `site-assets`, `published-files`, `submissions`) and their policies are

@@ -128,8 +128,10 @@ as $$
     false)
 $$;
 
--- New auth users get a profile. The role comes from app_metadata, which only
--- the service role can set (invitations); self-registration is always author.
+-- New auth users get a profile. Self-registration is always an author. A role
+-- in app_metadata (settable only by the service role) is honoured when present
+-- at insert time, but GoTrue usually writes app_metadata afterwards, so the app
+-- sets staff roles explicitly after inviting (app/admin/users/actions.ts).
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -139,11 +141,12 @@ as $$
 declare
   requested text := new.raw_app_meta_data ->> 'role';
 begin
-  insert into public.profiles (id, email, full_name, role)
+  insert into public.profiles (id, email, full_name, affiliation, role)
   values (
     new.id,
     new.email,
-    coalesce(new.raw_user_meta_data ->> 'full_name', ''),
+    left(coalesce(new.raw_user_meta_data ->> 'full_name', ''), 200),
+    left(nullif(trim(new.raw_user_meta_data ->> 'affiliation'), ''), 300),
     case when requested in ('super_admin', 'editor', 'reviewer', 'author')
          then requested::public.user_role else 'author' end
   );

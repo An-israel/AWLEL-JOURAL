@@ -92,7 +92,12 @@ jobs:
             echo "METRICS_SALT=$(openssl rand -hex 24)"
             echo "CRON_SECRET=$(openssl rand -hex 24)"
             echo "LOG_LEVEL=warn"
+            echo "SUPER_ADMIN_EMAIL=admin@awlel.local"
+            echo "SUPER_ADMIN_PASSWORD=Ci-only-passw0rd-$(openssl rand -hex 4)"
+            echo "SUPER_ADMIN_NAME=CI Super Admin"
           } > .env.local
+      - name: Create the first Super Admin
+        run: npm run seed:admin
       # Build cache for faster CI builds (item 107).
       - uses: actions/cache@v4
         with:

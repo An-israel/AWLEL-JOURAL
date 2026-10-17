@@ -5,6 +5,8 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "tests/e2e",
   fullyParallel: true,
+  // Admin tests change shared roles (e.g. the last Super Admin check).
+  workers: process.env.CI ? 2 : undefined,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
@@ -22,6 +24,8 @@ export default defineConfig({
     },
     {
       name: "mobile",
+      // Account and admin flows are covered once, on desktop.
+      testIgnore: /(auth|users)\.spec\.ts/,
       use: {
         ...devices["Pixel 7"],
         launchOptions: { executablePath: process.env.CHROMIUM_PATH || undefined },
