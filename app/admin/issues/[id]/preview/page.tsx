@@ -30,7 +30,9 @@ async function Content({ params }: { params: Props["params"] }) {
       <div className="mt-8 grid gap-10 md:grid-cols-[14rem_1fr]">
         <IssueCover issue={issue} sizes="224px" />
         <div>
-          <p className="text-xs font-semibold tracking-[0.18em] text-coral-ink uppercase">{issue.legacyLabel ? `${issue.legacyLabel} · ` : ""}Issue</p>
+          <p className="text-xs font-semibold tracking-[0.18em] text-coral-ink uppercase">
+            {issue.legacyLabel ? `${issue.legacyLabel} · ` : ""}Issue
+          </p>
           <h2 className="mt-2 text-4xl">{issue.label}</h2>
           {issue.title ? <p className="mt-2 text-lg text-ink-muted">{issue.title}</p> : null}
           <RichText html={data?.editorial ?? null} className="prose-reading mt-6" />

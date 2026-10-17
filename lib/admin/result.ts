@@ -5,18 +5,28 @@ export type ActionResult<T = undefined> =
   | { ok: true; message?: string; data?: T }
   | { ok: false; message: string; fieldErrors?: Record<string, string>; conflict?: boolean };
 
-export function invalid(error: z.ZodError, message = "Please check the highlighted fields."): ActionResult<never> {
+export function invalid(
+  error: z.ZodError,
+  message = "Please check the highlighted fields.",
+): ActionResult<never> {
   const fieldErrors: Record<string, string> = {};
   for (const issue of error.issues) fieldErrors[issue.path.join(".") || "form"] ??= issue.message;
   return { ok: false, message, fieldErrors };
 }
 
-export const forbiddenResult: ActionResult<never> = { ok: false, message: "You don't have permission to do that." };
+export const forbiddenResult: ActionResult<never> = {
+  ok: false,
+  message: "You don't have permission to do that.",
+};
 
-export const CONFLICT_MESSAGE = "Someone else edited this while you were working. Reload to see their changes, then make yours again.";
+export const CONFLICT_MESSAGE =
+  "Someone else edited this while you were working. Reload to see their changes, then make yours again.";
 
 /** Turns a Postgres/PostgREST error into something an editor can act on. */
-export function fromDbError(error: { code?: string; message: string }, subject = "item"): ActionResult<never> {
+export function fromDbError(
+  error: { code?: string; message: string },
+  subject = "item",
+): ActionResult<never> {
   switch (error.code) {
     case "AW409":
       return { ok: false, message: CONFLICT_MESSAGE, conflict: true };

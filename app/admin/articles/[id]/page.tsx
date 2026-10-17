@@ -34,7 +34,10 @@ async function Content({ params }: { params: Props["params"] }) {
 
   return (
     <>
-      <AdminPageHeader title={a.title} crumbs={[{ href: "/admin/articles", label: "Articles" }, { label: "Edit" }]} />
+      <AdminPageHeader
+        title={a.title}
+        crumbs={[{ href: "/admin/articles", label: "Articles" }, { label: "Edit" }]}
+      />
       <ArticleEditor
         issues={options.issues}
         categories={options.categories}

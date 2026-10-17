@@ -1,11 +1,14 @@
+import Image from "next/image";
 import Link from "next/link";
+import { getSiteSettings } from "@/lib/data/site-settings";
 import { AccountLink } from "./account-link";
 import { LogoMark } from "./logo";
 import { MainNav } from "./main-nav";
 import { MobileNav } from "./mobile-nav";
 import { SearchDialog } from "./search-dialog";
 
-export function SiteHeader() {
+export async function SiteHeader() {
+  const settings = await getSiteSettings();
   return (
     <header className="sticky top-0 z-40 shadow-[0_1px_0_var(--line)]">
       <div className="accent-bands h-1.5" aria-hidden />
@@ -16,7 +19,18 @@ export function SiteHeader() {
             className="group flex min-w-0 items-center gap-3 no-underline"
             aria-label="AWLEL — African, World Literature and English Language, home"
           >
-            <LogoMark className="size-11 shrink-0 text-navy sm:size-12" />
+            {settings.logoUrl ? (
+              <Image
+                src={settings.logoUrl}
+                alt=""
+                width={48}
+                height={48}
+                className="size-11 shrink-0 object-contain sm:size-12"
+                priority
+              />
+            ) : (
+              <LogoMark className="size-11 shrink-0 text-navy sm:size-12" />
+            )}
             <span className="min-w-0">
               <span className="flex items-center gap-2">
                 <span className="text-2xl leading-none font-bold tracking-tight text-navy sm:text-[1.7rem]">

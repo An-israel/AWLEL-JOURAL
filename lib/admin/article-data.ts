@@ -9,7 +9,9 @@ export interface Option {
 }
 
 /** Issue and category choices for the article form (drafts included, trash excluded). */
-export async function loadArticleOptions(currentCategoryId?: string | null): Promise<{ issues: Option[]; categories: Option[] }> {
+export async function loadArticleOptions(
+  currentCategoryId?: string | null,
+): Promise<{ issues: Option[]; categories: Option[] }> {
   const supabase = await createSupabaseServerClient();
   const [issues, { data: cats }] = await Promise.all([
     loadAdminIssues(),

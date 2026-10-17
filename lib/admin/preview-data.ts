@@ -17,7 +17,9 @@ export async function previewIssueSummary(issueId: string): Promise<IssueSummary
     loadAdminIssues(),
     supabase
       .from("issues")
-      .select("id, title, published_at, cover_alt, cover:stored_files!issues_cover_file_id_fkey(bucket, path)")
+      .select(
+        "id, title, published_at, cover_alt, cover:stored_files!issues_cover_file_id_fkey(bucket, path)",
+      )
       .eq("id", issueId)
       .maybeSingle(),
   ]);
@@ -41,7 +43,10 @@ export async function previewIssueSummary(issueId: string): Promise<IssueSummary
   };
 }
 
-export async function previewArticles(filter: { issueId?: string; articleId?: string }): Promise<ArticleSummary[]> {
+export async function previewArticles(filter: {
+  issueId?: string;
+  articleId?: string;
+}): Promise<ArticleSummary[]> {
   const supabase = await createSupabaseServerClient();
   let query = supabase
     .from("articles")
@@ -64,9 +69,12 @@ export async function previewArticles(filter: { issueId?: string; articleId?: st
     category: a.category,
     authors: [...a.authors]
       .sort((x, y) => x.position - y.position)
-      .map(
-        (x): AuthorSummary => ({ fullName: x.full_name, affiliation: x.affiliation, orcid: x.orcid, email: x.show_email ? x.email : null }),
-      ),
+      .map((x): AuthorSummary => ({
+        fullName: x.full_name,
+        affiliation: x.affiliation,
+        orcid: x.orcid,
+        email: x.show_email ? x.email : null,
+      })),
     hasPdf: Boolean(a.pdf_file_id),
     hasDocx: Boolean(a.docx_file_id),
     viewCount: a.view_count,

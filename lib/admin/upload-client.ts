@@ -19,7 +19,13 @@ export async function uploadToSlot(
   const problem = checkFile(slot, file);
   if (problem) return { ok: false, message: problem };
 
-  const ticket = await requestUpload({ slot, entityId, fileName: file.name, mimeType: file.type, size: file.size });
+  const ticket = await requestUpload({
+    slot,
+    entityId,
+    fileName: file.name,
+    mimeType: file.type,
+    size: file.size,
+  });
   if (!ticket.ok || !ticket.data) return ticket.ok ? { ok: false, message: "Upload failed." } : ticket;
   const { bucket, path, token } = ticket.data;
 
@@ -42,8 +48,17 @@ export async function uploadToSlot(
     xhr.timeout = 15 * 60 * 1000;
     xhr.send(file);
   });
-  if (!uploaded) return { ok: false, message: `${file.name} could not be uploaded. Check your connection and try again.` };
+  if (!uploaded)
+    return { ok: false, message: `${file.name} could not be uploaded. Check your connection and try again.` };
   onProgress?.(1);
 
-  return attachUpload({ slot, entityId, path, fileName: file.name, mimeType: file.type, size: file.size, expectedVersion });
+  return attachUpload({
+    slot,
+    entityId,
+    path,
+    fileName: file.name,
+    mimeType: file.type,
+    size: file.size,
+    expectedVersion,
+  });
 }

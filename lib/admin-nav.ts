@@ -16,22 +16,21 @@ const ALL: readonly UserRole[] = ["super_admin", "editor", "reviewer"];
 // Sections from section 10 of the brief, in order.
 export const ADMIN_NAV: readonly AdminNavItem[] = [
   { href: "/admin", label: "Dashboard", icon: "layout-dashboard", roles: STAFF },
-  { href: "/admin/issues", label: "Volumes and Issues", icon: "library", roles: STAFF, comingIn: "M5" },
-  { href: "/admin/articles", label: "Articles", icon: "file-text", roles: STAFF, comingIn: "M5" },
-  { href: "/admin/categories", label: "Categories", icon: "tags", roles: STAFF, comingIn: "M5" },
+  { href: "/admin/issues", label: "Volumes and Issues", icon: "library", roles: STAFF },
+  { href: "/admin/articles", label: "Articles", icon: "file-text", roles: STAFF },
+  { href: "/admin/categories", label: "Categories", icon: "tags", roles: STAFF },
   { href: "/admin/submissions", label: "Submissions", icon: "inbox", roles: STAFF, comingIn: "M6" },
   { href: "/admin/reviews", label: "Reviews", icon: "clipboard-check", roles: ALL, comingIn: "M6" },
-  { href: "/admin/pages", label: "Pages", icon: "panels-top-left", roles: SUPER, comingIn: "M5" },
+  { href: "/admin/pages", label: "Pages", icon: "panels-top-left", roles: SUPER },
   {
     href: "/admin/editorial-board",
     label: "Editorial Board",
     icon: "users-round",
     roles: SUPER,
-    comingIn: "M5",
   },
-  { href: "/admin/messages", label: "Messages", icon: "mail", roles: STAFF, comingIn: "M5" },
+  { href: "/admin/messages", label: "Messages", icon: "mail", roles: STAFF },
   { href: "/admin/users", label: "Users and Roles", icon: "shield-check", roles: SUPER },
-  { href: "/admin/settings", label: "Settings", icon: "settings", roles: SUPER, comingIn: "M5" },
+  { href: "/admin/settings", label: "Settings", icon: "settings", roles: SUPER },
   { href: "/admin/audit-log", label: "Audit Log", icon: "scroll-text", roles: SUPER, comingIn: "M8" },
   { href: "/admin/profile", label: "My profile", icon: "circle-user-round", roles: ALL },
 ];

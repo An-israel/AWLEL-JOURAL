@@ -40,9 +40,10 @@ test("the last Super Admin cannot be demoted", async ({ page }) => {
   await page.goto(`/admin/users?q=${encodeURIComponent(SUPER_ADMIN.email)}`);
   await page.getByLabel(/Role for/).selectOption("editor");
   await page.getByRole("alertdialog").getByRole("button", { name: "Change role" }).click();
-  await expect(
-    page.getByText("There must always be at least one active Super Admin.", { exact: false }),
-  ).toBeVisible();
+  // The toast's own wording (the page description repeats the rule itself).
+  await expect(page.getByText("Promote someone else first.", { exact: false })).toBeVisible();
+  const { data: me } = await supabase.from("profiles").select("role").eq("email", SUPER_ADMIN.email).single();
+  expect(me?.role).toBe("super_admin");
 });
 
 test("a deactivated user cannot sign in", async ({ page, browser }) => {

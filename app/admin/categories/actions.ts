@@ -38,17 +38,30 @@ export async function saveCategory(input: z.input<typeof categorySchema>): Promi
     if (error) return fromDbError(error, "category");
     if (!data) return fromDbError({ code: "AW409", message: "" });
   } else {
-    const { data: last } = await supabase.from("categories").select("sort_order").order("sort_order", { ascending: false }).limit(1).maybeSingle();
-    const { error } = await supabase.from("categories").insert({ ...values, sort_order: (last?.sort_order ?? 0) + 10 });
+    const { data: last } = await supabase
+      .from("categories")
+      .select("sort_order")
+      .order("sort_order", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const { error } = await supabase
+      .from("categories")
+      .insert({ ...values, sort_order: (last?.sort_order ?? 0) + 10 });
     if (error) return fromDbError(error, "category");
   }
   expireCatalog({ categories: true });
   return { ok: true, message: id ? "Category saved." : "Category created." };
 }
 
-export async function setCategoryArchived(input: { id: string; archived: boolean; expectedVersion: number }): Promise<ActionResult> {
+export async function setCategoryArchived(input: {
+  id: string;
+  archived: boolean;
+  expectedVersion: number;
+}): Promise<ActionResult> {
   if (!(await userWithRole(STAFF))) return forbiddenResult;
-  const parsed = z.object({ id: z.uuid(), archived: z.boolean(), expectedVersion: z.number().int() }).safeParse(input);
+  const parsed = z
+    .object({ id: z.uuid(), archived: z.boolean(), expectedVersion: z.number().int() })
+    .safeParse(input);
   if (!parsed.success) return { ok: false, message: "Invalid request." };
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase

@@ -2,6 +2,7 @@ import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import { logger } from "@/lib/server/logger";
 import { SITE_DEFAULTS } from "@/lib/site";
+import { publicStorageUrl } from "@/lib/storage";
 import { createSupabasePublicClient } from "@/lib/supabase/public";
 import { TAGS } from "./tags";
 
@@ -14,9 +15,11 @@ export interface SiteSettings {
   contactEmail: string;
   postalAddress: string;
   socialLinks: Record<string, string>;
+  logoUrl: string | null;
+  ogImageUrl: string | null;
 }
 
-const FALLBACK: SiteSettings = { ...SITE_DEFAULTS, socialLinks: {} };
+const FALLBACK: SiteSettings = { ...SITE_DEFAULTS, socialLinks: {}, logoUrl: null, ogImageUrl: null };
 
 /** Journal details from the database, cached until Settings are saved. */
 export async function getSiteSettings(): Promise<SiteSettings> {
@@ -26,7 +29,7 @@ export async function getSiteSettings(): Promise<SiteSettings> {
   const { data, error } = await createSupabasePublicClient()
     .from("site_settings")
     .select(
-      "journal_name, journal_short_name, subtitle, issn, publisher, contact_email, postal_address, social_links",
+      "journal_name, journal_short_name, subtitle, issn, publisher, contact_email, postal_address, social_links, logo:stored_files!site_settings_logo_file_id_fkey(path), og:stored_files!site_settings_default_og_image_file_id_fkey(path)",
     )
     .eq("id", 1)
     .maybeSingle();
@@ -48,5 +51,7 @@ export async function getSiteSettings(): Promise<SiteSettings> {
     contactEmail: data.contact_email,
     postalAddress: data.postal_address ?? SITE_DEFAULTS.postalAddress,
     socialLinks: (data.social_links ?? {}) as Record<string, string>,
+    logoUrl: data.logo ? publicStorageUrl("site-assets", data.logo.path) : null,
+    ogImageUrl: data.og ? publicStorageUrl("site-assets", data.og.path) : null,
   };
 }

@@ -20,7 +20,9 @@ async function Content({ params }: { params: Props["params"] }) {
     loadAdminIssues(),
     supabase
       .from("articles")
-      .select("id, version, title, first_page, authors:article_authors(full_name, position)")
+      .select(
+        "id, version, title, first_page, last_page, category_id, citation_style, authors:article_authors(full_name, position)",
+      )
       .eq("issue_id", id)
       .is("deleted_at", null)
       .order("sort_order"),
@@ -47,6 +49,9 @@ async function Content({ params }: { params: Props["params"] }) {
           version: a.version,
           title: a.title,
           firstPage: a.first_page,
+          lastPage: a.last_page,
+          categoryId: a.category_id,
+          citationStyle: a.citation_style,
           authors: [...a.authors].sort((x, y) => x.position - y.position).map((x) => x.full_name),
         }))}
       />

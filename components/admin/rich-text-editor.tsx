@@ -71,7 +71,11 @@ function Toolbar({ editor, allowHeadings }: { editor: Editor; allowHeadings: boo
   });
   const chain = () => editor.chain().focus();
   return (
-    <div role="toolbar" aria-label="Formatting" className="flex flex-wrap gap-0.5 border-b border-line bg-paper/60 p-1">
+    <div
+      role="toolbar"
+      aria-label="Formatting"
+      className="flex flex-wrap gap-0.5 border-b border-line bg-paper/60 p-1"
+    >
       <ToolButton label="Bold" active={s.bold} onClick={() => chain().toggleBold().run()}>
         <Bold className="size-4" />
       </ToolButton>
@@ -83,7 +87,11 @@ function Toolbar({ editor, allowHeadings }: { editor: Editor; allowHeadings: boo
           <ToolButton label="Heading" active={s.h2} onClick={() => chain().toggleHeading({ level: 2 }).run()}>
             <Heading2 className="size-4" />
           </ToolButton>
-          <ToolButton label="Subheading" active={s.h3} onClick={() => chain().toggleHeading({ level: 3 }).run()}>
+          <ToolButton
+            label="Subheading"
+            active={s.h3}
+            onClick={() => chain().toggleHeading({ level: 3 }).run()}
+          >
             <Heading3 className="size-4" />
           </ToolButton>
         </>
@@ -103,12 +111,17 @@ function Toolbar({ editor, allowHeadings }: { editor: Editor; allowHeadings: boo
         onClick={() => {
           if (s.link) return chain().unsetLink().run();
           const url = window.prompt("Link address (https://…)");
-          if (url && /^(https?:\/\/|mailto:|\/)/.test(url)) chain().extendMarkRange("link").setLink({ href: url }).run();
+          if (url && /^(https?:\/\/|mailto:|\/)/.test(url))
+            chain().extendMarkRange("link").setLink({ href: url }).run();
         }}
       >
         <Link2 className="size-4" />
       </ToolButton>
-      <ToolButton label="Mark as placeholder to replace" active={s.mark} onClick={() => chain().toggleHighlight().run()}>
+      <ToolButton
+        label="Mark as placeholder to replace"
+        active={s.mark}
+        onClick={() => chain().toggleHighlight().run()}
+      >
         <Highlighter className="size-4" />
       </ToolButton>
       <span className="mx-1 w-px bg-line" aria-hidden />
@@ -176,7 +189,11 @@ export function RichTextEditor({
         invalid ? "border-coral-ink" : "border-line",
       )}
     >
-      {editor ? <Toolbar editor={editor} allowHeadings={allowHeadings} /> : <div className="h-10 border-b border-line bg-paper/60" />}
+      {editor ? (
+        <Toolbar editor={editor} allowHeadings={allowHeadings} />
+      ) : (
+        <div className="h-10 border-b border-line bg-paper/60" />
+      )}
       <EditorContent editor={editor} />
     </div>
   );

@@ -37,7 +37,9 @@ async function Content({ searchParams }: { searchParams: Props["searchParams"] }
 
   let query = supabase
     .from("articles")
-    .select("id, title, status, updated_at, issue_id, deleted_at, category:categories(name)", { count: "exact" })
+    .select("id, title, status, updated_at, issue_id, deleted_at, category:categories(name)", {
+      count: "exact",
+    })
     .order("updated_at", { ascending: false })
     .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
   query = f.status === "trash" ? query.not("deleted_at", "is", null) : query.is("deleted_at", null);
@@ -60,7 +62,11 @@ async function Content({ searchParams }: { searchParams: Props["searchParams"] }
 
   return (
     <>
-      <form role="search" action="/admin/articles" className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1.5fr_1fr_1fr_auto] lg:items-end">
+      <form
+        role="search"
+        action="/admin/articles"
+        className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1.5fr_1fr_1fr_auto] lg:items-end"
+      >
         <div>
           <label htmlFor="af-q" className="text-xs font-medium text-ink-muted">
             Search titles
@@ -133,7 +139,13 @@ async function Content({ searchParams }: { searchParams: Props["searchParams"] }
                 <Td className="hidden text-ink-muted md:table-cell">{issueLabel.get(a.issue_id) ?? "—"}</Td>
                 <Td className="hidden text-ink-muted lg:table-cell">{a.category?.name ?? "—"}</Td>
                 <Td>
-                  {a.deleted_at ? <Badge variant="muted">Trash</Badge> : a.status === "published" ? <Badge variant="green">Published</Badge> : <Badge variant="gold">Draft</Badge>}
+                  {a.deleted_at ? (
+                    <Badge variant="muted">Trash</Badge>
+                  ) : a.status === "published" ? (
+                    <Badge variant="green">Published</Badge>
+                  ) : (
+                    <Badge variant="gold">Draft</Badge>
+                  )}
                 </Td>
                 <Td className="hidden text-ink-muted md:table-cell">{date.format(new Date(a.updated_at))}</Td>
               </Tr>

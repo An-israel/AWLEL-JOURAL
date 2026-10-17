@@ -23,7 +23,14 @@ export type FileSlot =
 export interface SlotRule {
   label: string;
   bucket: "issue-covers" | "published-files" | "site-assets";
-  fileRole: "issue_cover" | "issue_pdf" | "issue_docx" | "article_pdf" | "article_docx" | "board_photo" | "site_asset";
+  fileRole:
+    | "issue_cover"
+    | "issue_pdf"
+    | "issue_docx"
+    | "article_pdf"
+    | "article_docx"
+    | "board_photo"
+    | "site_asset";
   mimes: readonly string[];
   extensions: readonly string[];
   maxBytes: number;
@@ -36,14 +43,89 @@ const MB = 1024 * 1024;
 const IMAGES = [MIME.jpeg, MIME.png, MIME.webp];
 
 export const SLOT_RULES: Record<FileSlot, SlotRule> = {
-  issue_cover: { label: "Cover image", bucket: "issue-covers", fileRole: "issue_cover", mimes: IMAGES, extensions: [".jpg", ".jpeg", ".png", ".webp"], maxBytes: 10 * MB, table: "issues", column: "cover_file_id" },
-  issue_pdf: { label: "Full issue (PDF)", bucket: "published-files", fileRole: "issue_pdf", mimes: [MIME.pdf], extensions: [".pdf"], maxBytes: 100 * MB, table: "issues", column: "full_pdf_file_id" },
-  issue_docx: { label: "Full issue (Word)", bucket: "published-files", fileRole: "issue_docx", mimes: [MIME.docx], extensions: [".docx"], maxBytes: 100 * MB, table: "issues", column: "full_docx_file_id" },
-  article_pdf: { label: "Article PDF", bucket: "published-files", fileRole: "article_pdf", mimes: [MIME.pdf], extensions: [".pdf"], maxBytes: 50 * MB, table: "articles", column: "pdf_file_id" },
-  article_docx: { label: "Article Word file", bucket: "published-files", fileRole: "article_docx", mimes: [MIME.docx], extensions: [".docx"], maxBytes: 50 * MB, table: "articles", column: "docx_file_id" },
-  board_photo: { label: "Photo", bucket: "site-assets", fileRole: "board_photo", mimes: IMAGES, extensions: [".jpg", ".jpeg", ".png", ".webp"], maxBytes: 5 * MB, table: "editorial_board_members", column: "photo_file_id", superAdminOnly: true },
-  site_logo: { label: "Logo", bucket: "site-assets", fileRole: "site_asset", mimes: [...IMAGES, MIME.svg], extensions: [".jpg", ".jpeg", ".png", ".webp", ".svg"], maxBytes: 5 * MB, table: "site_settings", column: "logo_file_id", superAdminOnly: true },
-  site_og_image: { label: "Default sharing image", bucket: "site-assets", fileRole: "site_asset", mimes: IMAGES, extensions: [".jpg", ".jpeg", ".png", ".webp"], maxBytes: 5 * MB, table: "site_settings", column: "default_og_image_file_id", superAdminOnly: true },
+  issue_cover: {
+    label: "Cover image",
+    bucket: "issue-covers",
+    fileRole: "issue_cover",
+    mimes: IMAGES,
+    extensions: [".jpg", ".jpeg", ".png", ".webp"],
+    maxBytes: 10 * MB,
+    table: "issues",
+    column: "cover_file_id",
+  },
+  issue_pdf: {
+    label: "Full issue (PDF)",
+    bucket: "published-files",
+    fileRole: "issue_pdf",
+    mimes: [MIME.pdf],
+    extensions: [".pdf"],
+    maxBytes: 100 * MB,
+    table: "issues",
+    column: "full_pdf_file_id",
+  },
+  issue_docx: {
+    label: "Full issue (Word)",
+    bucket: "published-files",
+    fileRole: "issue_docx",
+    mimes: [MIME.docx],
+    extensions: [".docx"],
+    maxBytes: 100 * MB,
+    table: "issues",
+    column: "full_docx_file_id",
+  },
+  article_pdf: {
+    label: "Article PDF",
+    bucket: "published-files",
+    fileRole: "article_pdf",
+    mimes: [MIME.pdf],
+    extensions: [".pdf"],
+    maxBytes: 50 * MB,
+    table: "articles",
+    column: "pdf_file_id",
+  },
+  article_docx: {
+    label: "Article Word file",
+    bucket: "published-files",
+    fileRole: "article_docx",
+    mimes: [MIME.docx],
+    extensions: [".docx"],
+    maxBytes: 50 * MB,
+    table: "articles",
+    column: "docx_file_id",
+  },
+  board_photo: {
+    label: "Photo",
+    bucket: "site-assets",
+    fileRole: "board_photo",
+    mimes: IMAGES,
+    extensions: [".jpg", ".jpeg", ".png", ".webp"],
+    maxBytes: 5 * MB,
+    table: "editorial_board_members",
+    column: "photo_file_id",
+    superAdminOnly: true,
+  },
+  site_logo: {
+    label: "Logo",
+    bucket: "site-assets",
+    fileRole: "site_asset",
+    mimes: [...IMAGES, MIME.svg],
+    extensions: [".jpg", ".jpeg", ".png", ".webp", ".svg"],
+    maxBytes: 5 * MB,
+    table: "site_settings",
+    column: "logo_file_id",
+    superAdminOnly: true,
+  },
+  site_og_image: {
+    label: "Default sharing image",
+    bucket: "site-assets",
+    fileRole: "site_asset",
+    mimes: IMAGES,
+    extensions: [".jpg", ".jpeg", ".png", ".webp"],
+    maxBytes: 5 * MB,
+    table: "site_settings",
+    column: "default_og_image_file_id",
+    superAdminOnly: true,
+  },
 };
 
 /** Site settings is a single row; its file slots use fixed entity ids for version history. */
@@ -59,7 +141,8 @@ export function checkFile(slot: FileSlot, file: { name: string; type: string; si
   if (!rule.extensions.some((ext) => name.endsWith(ext))) {
     return `${rule.label} must be a ${rule.extensions.join(", ")} file.`;
   }
-  if (!rule.mimes.includes(file.type)) return `${file.name} isn't an accepted file type for ${rule.label.toLowerCase()}.`;
+  if (!rule.mimes.includes(file.type))
+    return `${file.name} isn't an accepted file type for ${rule.label.toLowerCase()}.`;
   if (file.size <= 0) return `${file.name} is empty.`;
   if (file.size > rule.maxBytes) return `${file.name} is larger than ${Math.round(rule.maxBytes / MB)} MB.`;
   return null;

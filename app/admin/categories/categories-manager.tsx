@@ -78,7 +78,12 @@ export function CategoriesManager({ initial }: { initial: CategoryRow[] }) {
               </p>
             </div>
             <div className="flex gap-1">
-              <Button size="sm" variant="ghost" onClick={() => setEditing({ row: c })} aria-label={`Edit ${c.name}`}>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setEditing({ row: c })}
+                aria-label={`Edit ${c.name}`}
+              >
                 <Pencil aria-hidden /> Edit
               </Button>
               <Button size="sm" variant="ghost" onClick={() => setArchiving(c)}>
@@ -106,10 +111,18 @@ export function CategoriesManager({ initial }: { initial: CategoryRow[] }) {
                   disabled={pending}
                   onClick={() =>
                     start(async () => {
-                      const r = await setCategoryArchived({ id: c.id, archived: false, expectedVersion: c.version });
+                      const r = await setCategoryArchived({
+                        id: c.id,
+                        archived: false,
+                        expectedVersion: c.version,
+                      });
                       if (r.ok) {
                         toast.success(r.message ?? "Restored");
-                        setRows((all) => all.map((x) => (x.id === c.id ? { ...x, isArchived: false, version: x.version + 1 } : x)));
+                        setRows((all) =>
+                          all.map((x) =>
+                            x.id === c.id ? { ...x, isArchived: false, version: x.version + 1 } : x,
+                          ),
+                        );
                       } else toast.error(r.message);
                     })
                   }
@@ -142,7 +155,9 @@ export function CategoriesManager({ initial }: { initial: CategoryRow[] }) {
             const r = await setCategoryArchived({ id: c.id, archived: true, expectedVersion: c.version });
             if (r.ok) {
               toast.success(r.message ?? "Archived");
-              setRows((all) => all.map((x) => (x.id === c.id ? { ...x, isArchived: true, version: x.version + 1 } : x)));
+              setRows((all) =>
+                all.map((x) => (x.id === c.id ? { ...x, isArchived: true, version: x.version + 1 } : x)),
+              );
             } else toast.error(r.message);
             setArchiving(null);
           });
@@ -152,7 +167,15 @@ export function CategoriesManager({ initial }: { initial: CategoryRow[] }) {
   );
 }
 
-function CategoryDialog({ editing, onClose, onSaved }: { editing: Editing; onClose: () => void; onSaved: () => void }) {
+function CategoryDialog({
+  editing,
+  onClose,
+  onSaved,
+}: {
+  editing: Editing;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const row = editing?.row ?? null;
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
@@ -180,7 +203,13 @@ function CategoryDialog({ editing, onClose, onSaved }: { editing: Editing; onClo
           onSubmit={(e) => {
             e.preventDefault();
             start(async () => {
-              const r = await saveCategory({ id: row?.id, expectedVersion: row?.version, name, slug, description });
+              const r = await saveCategory({
+                id: row?.id,
+                expectedVersion: row?.version,
+                name,
+                slug,
+                description,
+              });
               if (r.ok) {
                 toast.success(r.message ?? "Saved");
                 onSaved();
@@ -226,7 +255,13 @@ function CategoryDialog({ editing, onClose, onSaved }: { editing: Editing; onClo
           </div>
           <div>
             <Label htmlFor="cat-desc">Description</Label>
-            <Textarea id="cat-desc" value={description} onChange={(e) => setDescription(e.target.value)} className="mt-1.5" rows={3} />
+            <Textarea
+              id="cat-desc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="mt-1.5"
+              rows={3}
+            />
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>

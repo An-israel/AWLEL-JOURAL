@@ -6,6 +6,34 @@ All notable changes to this project are documented here. The project follows
 
 ## [Unreleased]
 
+### Added — Milestone 5: Admin content management
+
+- Volumes and Issues: grouped by year; create volumes (number and year entered separately) and issues;
+  edit issue details and editorial (rich text); cover and full-issue PDF/Word uploads; publish (optionally
+  with its draft articles) or unpublish; trash and restore; preview drafts; reorder articles.
+- Articles: searchable, filterable, paginated list (issue, category, status, trash); editor with slug from
+  title, abstract editor, keywords, pages, DOI, citation style, sortable authors (private emails unless
+  marked), PDF/Word uploads; publish, unpublish, trash, restore, preview. Article and authors save in one
+  transaction.
+- Bulk upload: CSV import of article metadata, drag-and-drop of many files with automatic matching
+  (CSV file names, author surname, first page), manual correction, then drafts created and files uploaded
+  three at a time with a visible queue. Existing articles in the issue can receive files too.
+- Uploads go straight from the browser to Supabase Storage via signed URLs, are verified and recorded,
+  and are compensated (removed) if the database step fails. Every replaced file is kept; any earlier
+  version can be opened or restored.
+- Categories: create, edit, archive/restore and reorder, with article counts.
+- Pages (Super Admin): Tiptap rich-text editor with live preview and a placeholder highlighter, search
+  description, "still contains placeholders" flag, and the Department timeline editor.
+- Editorial Board (Super Admin): groups (add, rename, reorder) and members (add, edit, reorder, photo,
+  "to be verified" flag, remove and restore).
+- Messages: contact-form inbox with unread state, search, trash and restore, and reply by email.
+- Settings (Super Admin): journal details, social links, logo (shown in the site header), default sharing
+  image, feature switches and the database schema version.
+- Optimistic locking everywhere an editor saves, with a clear "someone else edited this" message;
+  unsaved-changes warnings; public pages refreshed immediately after every change.
+- End-to-end tests: editor creates, uploads and publishes an article; bulk upload; stale edits refused;
+  categories; editors blocked from Super Admin sections; page editing; feature switches.
+
 ### Added — Milestone 4: Auth and roles
 
 - Sign in, author self-registration, forgot / reset password, sign out, and the `/auth/callback` route that

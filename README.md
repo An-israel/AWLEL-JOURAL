@@ -121,12 +121,27 @@ the sending domain is covered in `docs/ENGINEERING.md` (item 97).
 
 ## Editor's guide: publishing an issue
 
-_The admin screens arrive in milestone 5; this guide will be completed then._
+1. **Admin → Volumes and Issues → New volume.** Enter the volume number and the year (they are entered
+   separately because older years don't always follow the pattern).
+2. **Add issue** on that volume: issue number, and optionally the month and a legacy running number (for
+   example "19" for "Number 19 (November 2019)"). The issue opens as a draft.
+3. On the issue page, fill in any title or editorial and upload the **cover**, **full-issue PDF** and
+   **full-issue Word** files.
+4. **Bulk upload** the articles:
+   - Import a CSV with the columns `title, authors, affiliations, category, first_page, last_page, keywords,
+     abstract, citation_style, pdf_filename, docx_filename` (separate several authors with semicolons), or
+     add rows by hand.
+   - Drop all the PDF and Word files. Each is matched to its article by file name; choose the article for
+     any marked "Not matched".
+   - Press **Start**. Articles are created as drafts and files upload three at a time.
+5. Check each article (Admin → Articles), set the order of the contents by dragging on the issue page, and
+   use **Preview** to see the issue as readers will.
+6. Press **Publish issue** and tick "Also publish its draft articles". The archive, home page, category
+   pages and search update immediately.
 
-1. **Volumes and Issues → New volume:** enter the volume number and the year.
-2. **Add issue:** issue number, optional month and legacy number, cover image, editorial.
-3. **Bulk upload:** drop all article PDFs and Word files; match each file to its article row.
-4. Check the preview, then **Publish**. The home page, archive, sitemap and RSS update automatically.
+Replacing a file keeps the old one: open **Versions** next to any file to see or restore earlier uploads.
+If you see "Someone else edited this", another editor saved the same item while you were working; reload
+and make your change again.
 
 ## Self-hosting
 

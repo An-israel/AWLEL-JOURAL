@@ -9,7 +9,23 @@ export interface MatchableRow {
   docxFileName?: string;
 }
 
-const STOP = new Set(["the", "and", "of", "in", "on", "a", "an", "to", "for", "with", "from", "as", "by", "its", "their"]);
+const STOP = new Set([
+  "the",
+  "and",
+  "of",
+  "in",
+  "on",
+  "a",
+  "an",
+  "to",
+  "for",
+  "with",
+  "from",
+  "as",
+  "by",
+  "its",
+  "their",
+]);
 
 function tokens(text: string): string[] {
   return text
@@ -28,7 +44,9 @@ function tokens(text: string): string[] {
  */
 export function matchFileToRow(fileName: string, rows: MatchableRow[]): string | null {
   const lower = fileName.toLowerCase();
-  const exact = rows.find((r) => r.pdfFileName?.toLowerCase() === lower || r.docxFileName?.toLowerCase() === lower);
+  const exact = rows.find(
+    (r) => r.pdfFileName?.toLowerCase() === lower || r.docxFileName?.toLowerCase() === lower,
+  );
   if (exact) return exact.key;
 
   const fileTokens = new Set(tokens(fileName.replace(/\.(pdf|docx)$/i, "")));
@@ -38,7 +56,8 @@ export function matchFileToRow(fileName: string, rows: MatchableRow[]): string |
       const surname = row.authors[0] ? tokens(parseName(row.authors[0]).family)[0] : undefined;
       if (surname && fileTokens.has(surname)) score += 3;
       if (row.firstPage && fileTokens.has(String(row.firstPage))) score += 2;
-      for (const word of new Set(tokens(row.title))) if (word.length > 3 && !STOP.has(word) && fileTokens.has(word)) score += 1;
+      for (const word of new Set(tokens(row.title)))
+        if (word.length > 3 && !STOP.has(word) && fileTokens.has(word)) score += 1;
       return { key: row.key, score };
     })
     .sort((a, b) => b.score - a.score);

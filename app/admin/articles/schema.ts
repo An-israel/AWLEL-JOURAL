@@ -3,7 +3,10 @@ import { z } from "zod";
 export const authorSchema = z.object({
   fullName: z.string().trim().min(2, "Enter the author's name.").max(200),
   affiliation: z.string().trim().max(300).optional().default(""),
-  email: z.union([z.literal(""), z.email("Enter a valid email or leave it blank.")]).optional().default(""),
+  email: z
+    .union([z.literal(""), z.email("Enter a valid email or leave it blank.")])
+    .optional()
+    .default(""),
   showEmail: z.boolean().default(false),
   orcid: z
     .string()
@@ -24,7 +27,10 @@ export const articleSchema = z
     id: z.uuid().optional(),
     expectedVersion: z.number().int().optional(),
     issueId: z.uuid("Choose an issue."),
-    categoryId: z.union([z.literal(""), z.uuid()]).optional().default(""),
+    categoryId: z
+      .union([z.literal(""), z.uuid()])
+      .optional()
+      .default(""),
     title: z.string().trim().min(3, "Enter the title.").max(500),
     slug: z
       .string()
@@ -43,7 +49,10 @@ export const articleSchema = z
       .optional()
       .default(""),
     citationStyle: z.enum(["apa7", "mla8"]),
-    publishedAt: z.union([z.literal(""), z.iso.date()]).optional().default(""),
+    publishedAt: z
+      .union([z.literal(""), z.iso.date()])
+      .optional()
+      .default(""),
     authors: z.array(authorSchema).min(1, "Add at least one author.").max(50),
   })
   .refine((a) => !a.firstPage || !a.lastPage || a.lastPage >= a.firstPage, {

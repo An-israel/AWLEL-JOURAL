@@ -32,7 +32,11 @@ export interface IssueEditorData {
   editorial: string;
   coverAlt: string;
   publishedAt: string;
-  files: { issue_cover: AttachedFile | null; issue_pdf: AttachedFile | null; issue_docx: AttachedFile | null };
+  files: {
+    issue_cover: AttachedFile | null;
+    issue_pdf: AttachedFile | null;
+    issue_docx: AttachedFile | null;
+  };
   articles: { id: string; title: string; status: "draft" | "published"; pages: string }[];
 }
 
@@ -85,7 +89,12 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
       const r =
         kind === "trash" || kind === "restore"
           ? await setIssueDeleted({ id: issue.id, expectedVersion: version, deleted: kind === "trash" })
-          : await setIssueStatus({ id: issue.id, expectedVersion: version, status: kind === "publish" ? "published" : "draft", includeArticles: includeDrafts });
+          : await setIssueStatus({
+              id: issue.id,
+              expectedVersion: version,
+              status: kind === "publish" ? "published" : "draft",
+              includeArticles: includeDrafts,
+            });
       setConfirm(null);
       if (!r.ok) {
         if (r.conflict) setConflict(true);
@@ -101,9 +110,18 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
     <div className="mt-6 space-y-8">
       <ConflictBanner show={conflict} />
 
-      <section className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-line bg-white p-5" aria-label="Status">
+      <section
+        className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-line bg-white p-5"
+        aria-label="Status"
+      >
         <div className="flex items-center gap-3">
-          {issue.deleted ? <Badge variant="muted">In trash</Badge> : issue.status === "published" ? <Badge variant="green">Published</Badge> : <Badge variant="gold">Draft</Badge>}
+          {issue.deleted ? (
+            <Badge variant="muted">In trash</Badge>
+          ) : issue.status === "published" ? (
+            <Badge variant="green">Published</Badge>
+          ) : (
+            <Badge variant="gold">Draft</Badge>
+          )}
           <span className="text-sm text-ink-muted">
             {articles.length} articles{drafts ? `, ${drafts} still draft` : ""}
           </span>
@@ -135,7 +153,11 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
                   Unpublish
                 </Button>
               ) : (
-                <Button disabled={pending || dirty} title={dirty ? "Save your changes first" : undefined} onClick={() => setConfirm("publish")}>
+                <Button
+                  disabled={pending || dirty}
+                  title={dirty ? "Save your changes first" : undefined}
+                  onClick={() => setConfirm("publish")}
+                >
                   Publish issue
                 </Button>
               )}
@@ -151,12 +173,26 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <Label htmlFor="f-issue">Issue number</Label>
-            <Input id="f-issue" type="number" min={1} value={form.issueNumber} onChange={(e) => set("issueNumber")(e.target.value)} className="mt-1.5" aria-describedby="f-issue-error" aria-invalid={errors.issueNumber ? true : undefined} />
+            <Input
+              id="f-issue"
+              type="number"
+              min={1}
+              value={form.issueNumber}
+              onChange={(e) => set("issueNumber")(e.target.value)}
+              className="mt-1.5"
+              aria-describedby="f-issue-error"
+              aria-invalid={errors.issueNumber ? true : undefined}
+            />
             <FieldError id="f-issue-error">{errors.issueNumber}</FieldError>
           </div>
           <div>
             <Label htmlFor="f-month">Month (optional)</Label>
-            <NativeSelect id="f-month" value={form.month} onChange={(e) => set("month")(e.target.value)} className="mt-1.5">
+            <NativeSelect
+              id="f-month"
+              value={form.month}
+              onChange={(e) => set("month")(e.target.value)}
+              className="mt-1.5"
+            >
               <option value="">—</option>
               {MONTHS.map((m, i) => (
                 <option key={m} value={i + 1}>
@@ -167,19 +203,45 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
           </div>
           <div>
             <Label htmlFor="f-legacy">Legacy number (optional)</Label>
-            <Input id="f-legacy" type="number" min={1} value={form.legacyNumber} onChange={(e) => set("legacyNumber")(e.target.value)} className="mt-1.5" placeholder="e.g. 19" />
+            <Input
+              id="f-legacy"
+              type="number"
+              min={1}
+              value={form.legacyNumber}
+              onChange={(e) => set("legacyNumber")(e.target.value)}
+              className="mt-1.5"
+              placeholder="e.g. 19"
+            />
           </div>
           <div>
             <Label htmlFor="f-date">Publication date</Label>
-            <Input id="f-date" type="date" value={form.publishedAt} onChange={(e) => set("publishedAt")(e.target.value)} className="mt-1.5" />
+            <Input
+              id="f-date"
+              type="date"
+              value={form.publishedAt}
+              onChange={(e) => set("publishedAt")(e.target.value)}
+              className="mt-1.5"
+            />
           </div>
           <div className="sm:col-span-2">
             <Label htmlFor="f-title">Title (optional)</Label>
-            <Input id="f-title" value={form.title} onChange={(e) => set("title")(e.target.value)} className="mt-1.5" placeholder="e.g. Special issue on orature" />
+            <Input
+              id="f-title"
+              value={form.title}
+              onChange={(e) => set("title")(e.target.value)}
+              className="mt-1.5"
+              placeholder="e.g. Special issue on orature"
+            />
           </div>
           <div className="sm:col-span-2">
             <Label htmlFor="f-alt">Cover description (for screen readers)</Label>
-            <Input id="f-alt" value={form.coverAlt} onChange={(e) => set("coverAlt")(e.target.value)} className="mt-1.5" placeholder="Cover of AWLEL Volume 25, Issue 1" />
+            <Input
+              id="f-alt"
+              value={form.coverAlt}
+              onChange={(e) => set("coverAlt")(e.target.value)}
+              className="mt-1.5"
+              placeholder="Cover of AWLEL Volume 25, Issue 1"
+            />
           </div>
         </div>
         <div className="mt-5">
@@ -187,7 +249,12 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
             Editorial or introduction (optional)
           </p>
           <div className="mt-1.5">
-            <RichTextEditor id="f-editorial" labelledBy="f-editorial-label" value={form.editorial} onChange={set("editorial")} />
+            <RichTextEditor
+              id="f-editorial"
+              labelledBy="f-editorial-label"
+              value={form.editorial}
+              onChange={set("editorial")}
+            />
           </div>
         </div>
         <div className="mt-5 flex items-center gap-3">
@@ -202,10 +269,30 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
         <h2 id="files-title" className="text-lg font-semibold">
           Cover and full-issue files
         </h2>
-        <p className="text-sm text-ink-muted">Upload the final formatted files. Replacing a file keeps the old one in its history.</p>
-        <FileSlot slot="issue_cover" entityId={issue.id} version={version} onVersion={setVersion} current={issue.files.issue_cover} />
-        <FileSlot slot="issue_pdf" entityId={issue.id} version={version} onVersion={setVersion} current={issue.files.issue_pdf} />
-        <FileSlot slot="issue_docx" entityId={issue.id} version={version} onVersion={setVersion} current={issue.files.issue_docx} />
+        <p className="text-sm text-ink-muted">
+          Upload the final formatted files. Replacing a file keeps the old one in its history.
+        </p>
+        <FileSlot
+          slot="issue_cover"
+          entityId={issue.id}
+          version={version}
+          onVersion={setVersion}
+          current={issue.files.issue_cover}
+        />
+        <FileSlot
+          slot="issue_pdf"
+          entityId={issue.id}
+          version={version}
+          onVersion={setVersion}
+          current={issue.files.issue_pdf}
+        />
+        <FileSlot
+          slot="issue_docx"
+          entityId={issue.id}
+          version={version}
+          onVersion={setVersion}
+          current={issue.files.issue_docx}
+        />
       </section>
 
       <section aria-labelledby="articles-title" className="space-y-3">
@@ -220,7 +307,10 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
                 disabled={pending}
                 onClick={() =>
                   start(async () => {
-                    const r = await reorderIssueArticles({ issueId: issue.id, ids: articles.map((a) => a.id) });
+                    const r = await reorderIssueArticles({
+                      issueId: issue.id,
+                      ids: articles.map((a) => a.id),
+                    });
                     if (r.ok) {
                       setOrderDirty(false);
                       toast.success(r.message ?? "Saved");
@@ -265,7 +355,11 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
                   </Link>
                   {a.pages ? <span className="ml-2 text-xs text-ink-muted">{a.pages}</span> : null}
                 </div>
-                {a.status === "published" ? <Badge variant="green">Published</Badge> : <Badge variant="gold">Draft</Badge>}
+                {a.status === "published" ? (
+                  <Badge variant="green">Published</Badge>
+                ) : (
+                  <Badge variant="gold">Draft</Badge>
+                )}
               </div>
             )}
           />
@@ -278,10 +372,16 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
         title={`Publish ${issue.label}?`}
         description={
           <span className="block space-y-3">
-            <span className="block">The issue appears in the archive and on the home page straight away.</span>
+            <span className="block">
+              The issue appears in the archive and on the home page straight away.
+            </span>
             {drafts > 0 ? (
               <label className="flex items-center gap-2 text-ink">
-                <input type="checkbox" checked={includeDrafts} onChange={(e) => setIncludeDrafts(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={includeDrafts}
+                  onChange={(e) => setIncludeDrafts(e.target.checked)}
+                />
                 Also publish its {drafts} draft {drafts === 1 ? "article" : "articles"}
               </label>
             ) : null}

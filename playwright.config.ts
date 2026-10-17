@@ -17,6 +17,8 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
+      // Admin content tests change shared data; they run in their own project, last.
+      testIgnore: /content-admin\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         launchOptions: { executablePath: process.env.CHROMIUM_PATH || undefined },
@@ -25,9 +27,19 @@ export default defineConfig({
     {
       name: "mobile",
       // Account and admin flows are covered once, on desktop.
-      testIgnore: /(auth|users)\.spec\.ts/,
+      testIgnore: /(auth|users|content-admin)\.spec\.ts/,
       use: {
         ...devices["Pixel 7"],
+        launchOptions: { executablePath: process.env.CHROMIUM_PATH || undefined },
+      },
+    },
+    {
+      name: "admin-content",
+      testMatch: /content-admin\.spec\.ts/,
+      dependencies: ["chromium", "mobile"],
+      fullyParallel: false,
+      use: {
+        ...devices["Desktop Chrome"],
         launchOptions: { executablePath: process.env.CHROMIUM_PATH || undefined },
       },
     },

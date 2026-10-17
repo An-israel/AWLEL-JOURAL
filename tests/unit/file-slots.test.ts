@@ -7,9 +7,13 @@ describe("checkFile", () => {
   });
   it("rejects wrong extensions, wrong types, empty and oversized files", () => {
     expect(checkFile("article_pdf", { name: "Okeke.docx", type: MIME.docx, size: 1000 })).toMatch(/must be/);
-    expect(checkFile("article_docx", { name: "x.docx", type: "application/zip", size: 1000 })).toMatch(/accepted file type/);
+    expect(checkFile("article_docx", { name: "x.docx", type: "application/zip", size: 1000 })).toMatch(
+      /accepted file type/,
+    );
     expect(checkFile("issue_cover", { name: "c.png", type: MIME.png, size: 0 })).toMatch(/empty/);
-    expect(checkFile("issue_cover", { name: "c.png", type: MIME.png, size: 11 * 1024 * 1024 })).toMatch(/larger than 10 MB/);
+    expect(checkFile("issue_cover", { name: "c.png", type: MIME.png, size: 11 * 1024 * 1024 })).toMatch(
+      /larger than 10 MB/,
+    );
   });
 });
 

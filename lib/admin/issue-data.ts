@@ -21,7 +21,9 @@ export async function loadAdminIssues(): Promise<AdminIssue[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("issues")
-    .select("id, volume_id, issue_number, month, legacy_number, status, deleted_at, volume:volumes!inner(volume_number, year)")
+    .select(
+      "id, volume_id, issue_number, month, legacy_number, status, deleted_at, volume:volumes!inner(volume_number, year)",
+    )
     .order("issue_number");
   if (error) throw new Error("Could not load issues");
   const perVolume = new Map<string, number>();

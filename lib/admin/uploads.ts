@@ -46,7 +46,12 @@ function expire(slot: FileSlot, entityId: string) {
 }
 
 /** Points the entity's file column at `fileId` if its version still matches. */
-async function setEntityFile(slot: FileSlot, entityId: string, fileId: string | null, expectedVersion: number) {
+async function setEntityFile(
+  slot: FileSlot,
+  entityId: string,
+  fileId: string | null,
+  expectedVersion: number,
+) {
   const rule = SLOT_RULES[slot];
   const supabase = await createSupabaseServerClient();
   // Table and column come from SLOT_RULES (a fixed whitelist), never from input.
@@ -82,7 +87,9 @@ export async function requestUpload(
 
   const rule = SLOT_RULES[slot];
   const path = `${slot}/${entityKey(slot, entityId)}/${randomUUID()}-${safeFileName(fileName)}`;
-  const { data, error } = await createSupabaseAdminClient().storage.from(rule.bucket).createSignedUploadUrl(path);
+  const { data, error } = await createSupabaseAdminClient()
+    .storage.from(rule.bucket)
+    .createSignedUploadUrl(path);
   if (error || !data) {
     logger.error({ err: error?.message, slot }, "could not create signed upload URL");
     return { ok: false, message: "The upload could not be started. Please try again." };
@@ -90,7 +97,10 @@ export async function requestUpload(
   return { ok: true, data: { bucket: rule.bucket, path: data.path, token: data.token } };
 }
 
-const attachSchema = requestSchema.extend({ path: z.string().min(1).max(600), expectedVersion: z.number().int() });
+const attachSchema = requestSchema.extend({
+  path: z.string().min(1).max(600),
+  expectedVersion: z.number().int(),
+});
 
 export interface AttachedFile {
   id: string;
@@ -111,7 +121,8 @@ export async function attachUpload(
   const rule = SLOT_RULES[slot];
   const key = entityKey(slot, entityId);
   // The path must be one this action could have issued for this slot and entity.
-  if (!path.startsWith(`${slot}/${key}/`) || path.includes("..")) return { ok: false, message: "Invalid upload path." };
+  if (!path.startsWith(`${slot}/${key}/`) || path.includes(".."))
+    return { ok: false, message: "Invalid upload path." };
 
   const admin = createSupabaseAdminClient();
   const dir = path.slice(0, path.lastIndexOf("/"));
@@ -159,7 +170,12 @@ export async function attachUpload(
     message: `${rule.label} uploaded.`,
     data: {
       version: result.version,
-      file: { id: stored.id, originalName: stored.original_name, sizeBytes: stored.size_bytes, createdAt: stored.created_at },
+      file: {
+        id: stored.id,
+        originalName: stored.original_name,
+        sizeBytes: stored.size_bytes,
+        createdAt: stored.created_at,
+      },
     },
   };
 }
@@ -170,7 +186,9 @@ export interface FileVersion extends AttachedFile {
   uploadedBy: string | null;
 }
 
-export async function listFileVersions(input: z.infer<typeof slotRefSchema>): Promise<ActionResult<FileVersion[]>> {
+export async function listFileVersions(
+  input: z.infer<typeof slotRefSchema>,
+): Promise<ActionResult<FileVersion[]>> {
   const parsed = slotRefSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Invalid request." };
   if (!(await authorise(parsed.data.slot))) return forbiddenResult;
@@ -197,10 +215,15 @@ export async function listFileVersions(input: z.infer<typeof slotRefSchema>): Pr
   };
 }
 
-const restoreSchema = slotRefSchema.extend({ fileId: z.uuid().nullable(), expectedVersion: z.number().int() });
+const restoreSchema = slotRefSchema.extend({
+  fileId: z.uuid().nullable(),
+  expectedVersion: z.number().int(),
+});
 
 /** Restores an earlier version (or, with fileId null, detaches the file). */
-export async function setSlotFile(input: z.infer<typeof restoreSchema>): Promise<ActionResult<{ version: number }>> {
+export async function setSlotFile(
+  input: z.infer<typeof restoreSchema>,
+): Promise<ActionResult<{ version: number }>> {
   const parsed = restoreSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Invalid request." };
   const { slot, entityId, fileId, expectedVersion } = parsed.data;
@@ -222,7 +245,9 @@ export async function setSlotFile(input: z.infer<typeof restoreSchema>): Promise
   expire(slot, entityId);
   return {
     ok: true,
-    message: fileId ? "Earlier version restored." : `${SLOT_RULES[slot].label} removed. It stays in the version history.`,
+    message: fileId
+      ? "Earlier version restored."
+      : `${SLOT_RULES[slot].label} removed. It stays in the version history.`,
     data: { version: result.version },
   };
 }
@@ -232,7 +257,11 @@ export async function staffFileUrl(fileId: string): Promise<ActionResult<{ url: 
   if (!z.uuid().safeParse(fileId).success) return { ok: false, message: "Invalid file." };
   if (!(await userWithRole(["super_admin", "editor"]))) return forbiddenResult;
   const supabase = await createSupabaseServerClient();
-  const { data: file } = await supabase.from("stored_files").select("bucket, path, original_name").eq("id", fileId).maybeSingle();
+  const { data: file } = await supabase
+    .from("stored_files")
+    .select("bucket, path, original_name")
+    .eq("id", fileId)
+    .maybeSingle();
   if (!file) return { ok: false, message: "File not found." };
   const { data, error } = await createSupabaseAdminClient()
     .storage.from(file.bucket)

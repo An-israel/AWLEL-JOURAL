@@ -12,14 +12,25 @@ async function Content({ searchParams }: { searchParams: PageProps<"/admin/artic
   await requireRole(STAFF_ROLES, "/admin/articles/new");
   const { issue } = await searchParams;
   const options = await loadArticleOptions();
-  const defaultIssueId = typeof issue === "string" && options.issues.some((i) => i.id === issue) ? issue : undefined;
-  return <ArticleEditor article={null} issues={options.issues} categories={options.categories} defaultIssueId={defaultIssueId} />;
+  const defaultIssueId =
+    typeof issue === "string" && options.issues.some((i) => i.id === issue) ? issue : undefined;
+  return (
+    <ArticleEditor
+      article={null}
+      issues={options.issues}
+      categories={options.categories}
+      defaultIssueId={defaultIssueId}
+    />
+  );
 }
 
 export default function NewArticlePage({ searchParams }: PageProps<"/admin/articles/new">) {
   return (
     <>
-      <AdminPageHeader title="New article" crumbs={[{ href: "/admin/articles", label: "Articles" }, { label: "New" }]} />
+      <AdminPageHeader
+        title="New article"
+        crumbs={[{ href: "/admin/articles", label: "Articles" }, { label: "New" }]}
+      />
       <Suspense fallback={<div className="mt-6 h-96 animate-pulse rounded-lg bg-line" />}>
         <Content searchParams={searchParams} />
       </Suspense>

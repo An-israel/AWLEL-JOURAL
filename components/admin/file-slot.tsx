@@ -7,13 +7,21 @@ import { ConfirmDialog } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/toaster";
 import { SLOT_RULES, type FileSlot as Slot } from "@/lib/admin/file-slots";
 import { uploadToSlot } from "@/lib/admin/upload-client";
-import { listFileVersions, setSlotFile, staffFileUrl, type AttachedFile, type FileVersion } from "@/lib/admin/uploads";
+import {
+  listFileVersions,
+  setSlotFile,
+  staffFileUrl,
+  type AttachedFile,
+  type FileVersion,
+} from "@/lib/admin/uploads";
 import { cn } from "@/lib/utils";
 
 const date = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });
 
 function size(bytes: number) {
-  return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return bytes < 1024 * 1024
+    ? `${Math.max(1, Math.round(bytes / 1024))} KB`
+    : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 /**
@@ -86,7 +94,10 @@ export function FileSlot({
 
   return (
     <div
-      className={cn("rounded-lg border bg-white p-4 transition-colors", dragOver ? "border-royal bg-[#E8EDFA]" : "border-line")}
+      className={cn(
+        "rounded-lg border bg-white p-4 transition-colors",
+        dragOver ? "border-royal bg-[#E8EDFA]" : "border-line",
+      )}
       onDragOver={(e) => {
         e.preventDefault();
         setDragOver(true);
@@ -104,12 +115,13 @@ export function FileSlot({
           <p className="text-sm font-semibold text-ink">{rule.label}</p>
           {file ? (
             <p className="mt-1 text-sm text-ink-muted">
-              <span className="font-medium break-all text-ink">{file.originalName}</span> · {size(file.sizeBytes)} · uploaded{" "}
-              {date.format(new Date(file.createdAt))}
+              <span className="font-medium break-all text-ink">{file.originalName}</span> ·{" "}
+              {size(file.sizeBytes)} · uploaded {date.format(new Date(file.createdAt))}
             </p>
           ) : (
             <p className="mt-1 text-sm text-ink-muted">
-              No file yet. Drop a {rule.extensions.join(" / ")} file here (max {Math.round(rule.maxBytes / 1024 / 1024)} MB).
+              No file yet. Drop a {rule.extensions.join(" / ")} file here (max{" "}
+              {Math.round(rule.maxBytes / 1024 / 1024)} MB).
             </p>
           )}
         </div>
@@ -123,11 +135,23 @@ export function FileSlot({
             <History aria-hidden /> Versions
           </Button>
           {file ? (
-            <Button type="button" size="sm" variant="ghost" onClick={() => setConfirmRemove(true)} disabled={busy}>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setConfirmRemove(true)}
+              disabled={busy}
+            >
               <Trash2 aria-hidden /> Remove
             </Button>
           ) : null}
-          <Button type="button" size="sm" variant="outline" onClick={() => input.current?.click()} disabled={busy}>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => input.current?.click()}
+            disabled={busy}
+          >
             <FileUp aria-hidden /> {file ? "Replace" : "Upload"}
           </Button>
           <input
@@ -149,7 +173,10 @@ export function FileSlot({
       {progress !== null ? (
         <div className="mt-3" role="status" aria-live="polite">
           <div className="h-1.5 overflow-hidden rounded-full bg-line">
-            <div className="h-full bg-royal transition-[width]" style={{ width: `${Math.round(progress * 100)}%` }} />
+            <div
+              className="h-full bg-royal transition-[width]"
+              style={{ width: `${Math.round(progress * 100)}%` }}
+            />
           </div>
           <p className="mt-1 text-xs text-ink-muted">Uploading… {Math.round(progress * 100)}%</p>
         </div>
@@ -175,10 +202,22 @@ export function FileSlot({
                     <span className="text-xs font-semibold text-[#2F6B22]">Current</span>
                   ) : (
                     <span className="flex gap-1">
-                      <Button type="button" size="sm" variant="ghost" onClick={() => open(v.id)} disabled={busy}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => open(v.id)}
+                        disabled={busy}
+                      >
                         Open
                       </Button>
-                      <Button type="button" size="sm" variant="outline" onClick={() => choose(v.id, v)} disabled={busy}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => choose(v.id, v)}
+                        disabled={busy}
+                      >
                         Restore
                       </Button>
                     </span>

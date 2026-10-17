@@ -12,7 +12,9 @@ const STAFF = ["super_admin", "editor"] as const;
 const conflict = () => fromDbError({ code: "AW409", message: "" });
 
 /** Saves an article and its ordered authors in one transaction (save_article). */
-export async function saveArticle(input: ArticleInput): Promise<ActionResult<{ id: string; version: number }>> {
+export async function saveArticle(
+  input: ArticleInput,
+): Promise<ActionResult<{ id: string; version: number }>> {
   if (!(await userWithRole(STAFF))) return forbiddenResult;
   const parsed = articleSchema.safeParse(input);
   if (!parsed.success) return invalid(parsed.error);
@@ -57,24 +59,40 @@ export async function saveArticle(input: ArticleInput): Promise<ActionResult<{ i
   if (error) return fromDbError(error, "article");
 
   expireCatalog({ issueIds: [a.issueId, previousIssueId], articleIds: [data.id], categories: true });
-  return { ok: true, message: a.id ? "Article saved." : "Draft article created.", data: { id: data.id, version: data.version } };
+  return {
+    ok: true,
+    message: a.id ? "Article saved." : "Draft article created.",
+    data: { id: data.id, version: data.version },
+  };
 }
 
-const statusSchema = z.object({ id: z.uuid(), expectedVersion: z.number().int(), status: z.enum(["draft", "published"]) });
+const statusSchema = z.object({
+  id: z.uuid(),
+  expectedVersion: z.number().int(),
+  status: z.enum(["draft", "published"]),
+});
 
-export async function setArticleStatus(input: z.input<typeof statusSchema>): Promise<ActionResult<{ version: number }>> {
+export async function setArticleStatus(
+  input: z.input<typeof statusSchema>,
+): Promise<ActionResult<{ version: number }>> {
   if (!(await userWithRole(STAFF))) return forbiddenResult;
   const parsed = statusSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Invalid request." };
   const supabase = await createSupabaseServerClient();
-  const { data: current } = await supabase.from("articles").select("published_at, issue_id").eq("id", parsed.data.id).maybeSingle();
+  const { data: current } = await supabase
+    .from("articles")
+    .select("published_at, issue_id")
+    .eq("id", parsed.data.id)
+    .maybeSingle();
   if (!current) return { ok: false, message: "Article not found." };
 
   const { data, error } = await supabase
     .from("articles")
     .update({
       status: parsed.data.status,
-      ...(parsed.data.status === "published" && !current.published_at ? { published_at: new Date().toISOString() } : {}),
+      ...(parsed.data.status === "published" && !current.published_at
+        ? { published_at: new Date().toISOString() }
+        : {}),
     })
     .eq("id", parsed.data.id)
     .eq("version", parsed.data.expectedVersion)
@@ -84,7 +102,11 @@ export async function setArticleStatus(input: z.input<typeof statusSchema>): Pro
   if (error) return fromDbError(error, "article");
   if (!data) return conflict();
 
-  const { data: issue } = await supabase.from("issues").select("status").eq("id", current.issue_id).maybeSingle();
+  const { data: issue } = await supabase
+    .from("issues")
+    .select("status")
+    .eq("id", current.issue_id)
+    .maybeSingle();
   expireCatalog({ issueIds: [current.issue_id], articleIds: [parsed.data.id], categories: true });
   const message =
     parsed.data.status === "draft"
@@ -95,9 +117,15 @@ export async function setArticleStatus(input: z.input<typeof statusSchema>): Pro
   return { ok: true, message, data: { version: data.version } };
 }
 
-export async function setArticleDeleted(input: { id: string; expectedVersion: number; deleted: boolean }): Promise<ActionResult<{ version: number }>> {
+export async function setArticleDeleted(input: {
+  id: string;
+  expectedVersion: number;
+  deleted: boolean;
+}): Promise<ActionResult<{ version: number }>> {
   if (!(await userWithRole(STAFF))) return forbiddenResult;
-  const parsed = z.object({ id: z.uuid(), expectedVersion: z.number().int(), deleted: z.boolean() }).safeParse(input);
+  const parsed = z
+    .object({ id: z.uuid(), expectedVersion: z.number().int(), deleted: z.boolean() })
+    .safeParse(input);
   if (!parsed.success) return { ok: false, message: "Invalid request." };
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
@@ -115,7 +143,9 @@ export async function setArticleDeleted(input: { id: string; expectedVersion: nu
   expireCatalog({ issueIds: [data.issue_id], articleIds: [parsed.data.id], categories: true });
   return {
     ok: true,
-    message: parsed.data.deleted ? "Article moved to trash. You can restore it." : "Article restored as a draft.",
+    message: parsed.data.deleted
+      ? "Article moved to trash. You can restore it."
+      : "Article restored as a draft.",
     data: { version: data.version },
   };
 }

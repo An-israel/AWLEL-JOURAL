@@ -50,7 +50,15 @@ type AuthorRow = AuthorInput & { key: string };
 
 let keySeq = 0;
 const newKey = () => `a${++keySeq}`;
-const emptyAuthor = (): AuthorRow => ({ key: newKey(), fullName: "", affiliation: "", email: "", showEmail: false, orcid: "", isCorresponding: false });
+const emptyAuthor = (): AuthorRow => ({
+  key: newKey(),
+  fullName: "",
+  affiliation: "",
+  email: "",
+  showEmail: false,
+  orcid: "",
+  isCorresponding: false,
+});
 
 export function ArticleEditor({
   article,
@@ -96,7 +104,9 @@ export function ArticleEditor({
   };
   const setAuthor = (key: string, patch: Partial<AuthorInput>) => {
     setAuthors((list) =>
-      list.map((a) => (a.key === key ? { ...a, ...patch } : patch.isCorresponding ? { ...a, isCorresponding: false } : a)),
+      list.map((a) =>
+        a.key === key ? { ...a, ...patch } : patch.isCorresponding ? { ...a, isCorresponding: false } : a,
+      ),
     );
     setDirty(true);
   };
@@ -112,7 +122,14 @@ export function ArticleEditor({
           .split(/[,;\n]/)
           .map((k) => k.trim())
           .filter(Boolean),
-        authors: authors.map(({ key: _key, ...a }) => a),
+        authors: authors.map((a) => ({
+          fullName: a.fullName,
+          affiliation: a.affiliation,
+          email: a.email,
+          showEmail: a.showEmail,
+          orcid: a.orcid,
+          isCorresponding: a.isCorresponding,
+        })),
       });
       if (!r.ok) {
         setErrors(r.fieldErrors ?? {});
@@ -136,7 +153,11 @@ export function ArticleEditor({
       const r =
         kind === "trash" || kind === "restore"
           ? await setArticleDeleted({ id: article.id, expectedVersion: version, deleted: kind === "trash" })
-          : await setArticleStatus({ id: article.id, expectedVersion: version, status: kind === "publish" ? "published" : "draft" });
+          : await setArticleStatus({
+              id: article.id,
+              expectedVersion: version,
+              status: kind === "publish" ? "published" : "draft",
+            });
       setConfirm(null);
       if (!r.ok) {
         if (r.conflict) setConflict(true);
@@ -153,11 +174,22 @@ export function ArticleEditor({
       <ConflictBanner show={conflict} />
 
       {article ? (
-        <section className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-line bg-white p-5" aria-label="Status">
+        <section
+          className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-line bg-white p-5"
+          aria-label="Status"
+        >
           <div className="flex flex-wrap items-center gap-3 text-sm">
-            {article.deleted ? <Badge variant="muted">In trash</Badge> : article.status === "published" ? <Badge variant="green">Published</Badge> : <Badge variant="gold">Draft</Badge>}
+            {article.deleted ? (
+              <Badge variant="muted">In trash</Badge>
+            ) : article.status === "published" ? (
+              <Badge variant="green">Published</Badge>
+            ) : (
+              <Badge variant="gold">Draft</Badge>
+            )}
             {article.status === "published" && !article.issuePublished ? (
-              <span className="text-ink-muted">Its issue is still a draft, so it isn&rsquo;t on the site yet.</span>
+              <span className="text-ink-muted">
+                Its issue is still a draft, so it isn&rsquo;t on the site yet.
+              </span>
             ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
@@ -187,7 +219,11 @@ export function ArticleEditor({
                     Unpublish
                   </Button>
                 ) : (
-                  <Button disabled={pending || dirty} title={dirty ? "Save your changes first" : undefined} onClick={() => status("publish")}>
+                  <Button
+                    disabled={pending || dirty}
+                    title={dirty ? "Save your changes first" : undefined}
+                    onClick={() => status("publish")}
+                  >
                     Publish article
                   </Button>
                 )}
@@ -204,7 +240,14 @@ export function ArticleEditor({
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <div>
             <Label htmlFor="a-issue">Issue</Label>
-            <NativeSelect id="a-issue" value={form.issueId} onChange={(e) => set("issueId", e.target.value)} className="mt-1.5" aria-invalid={err("issueId") ? true : undefined} aria-describedby="a-issue-error">
+            <NativeSelect
+              id="a-issue"
+              value={form.issueId}
+              onChange={(e) => set("issueId", e.target.value)}
+              className="mt-1.5"
+              aria-invalid={err("issueId") ? true : undefined}
+              aria-describedby="a-issue-error"
+            >
               <option value="">Choose an issue…</option>
               {issues.map((i) => (
                 <option key={i.id} value={i.id}>
@@ -216,7 +259,12 @@ export function ArticleEditor({
           </div>
           <div>
             <Label htmlFor="a-category">Category</Label>
-            <NativeSelect id="a-category" value={form.categoryId} onChange={(e) => set("categoryId", e.target.value)} className="mt-1.5">
+            <NativeSelect
+              id="a-category"
+              value={form.categoryId}
+              onChange={(e) => set("categoryId", e.target.value)}
+              className="mt-1.5"
+            >
               <option value="">No category</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -255,28 +303,60 @@ export function ArticleEditor({
             />
             <p id="a-slug-hint" className="mt-1 text-xs text-ink-muted">
               /articles/{form.slug || "…"}
-              {article?.status === "published" ? " · If you change it, the old address keeps working and redirects here." : ""}
+              {article?.status === "published"
+                ? " · If you change it, the old address keeps working and redirects here."
+                : ""}
             </p>
             <FieldError id="a-slug-error">{err("slug")}</FieldError>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="a-first">First page</Label>
-              <Input id="a-first" type="number" min={1} value={form.firstPage} onChange={(e) => set("firstPage", e.target.value)} className="mt-1.5" />
+              <Input
+                id="a-first"
+                type="number"
+                min={1}
+                value={form.firstPage}
+                onChange={(e) => set("firstPage", e.target.value)}
+                className="mt-1.5"
+              />
             </div>
             <div>
               <Label htmlFor="a-last">Last page</Label>
-              <Input id="a-last" type="number" min={1} value={form.lastPage} onChange={(e) => set("lastPage", e.target.value)} className="mt-1.5" aria-invalid={err("lastPage") ? true : undefined} aria-describedby="a-last-error" />
+              <Input
+                id="a-last"
+                type="number"
+                min={1}
+                value={form.lastPage}
+                onChange={(e) => set("lastPage", e.target.value)}
+                className="mt-1.5"
+                aria-invalid={err("lastPage") ? true : undefined}
+                aria-describedby="a-last-error"
+              />
               <FieldError id="a-last-error">{err("lastPage")}</FieldError>
             </div>
           </div>
           <div>
             <Label htmlFor="a-date">Publication date</Label>
-            <Input id="a-date" type="date" value={form.publishedAt} onChange={(e) => set("publishedAt", e.target.value)} className="mt-1.5" />
+            <Input
+              id="a-date"
+              type="date"
+              value={form.publishedAt}
+              onChange={(e) => set("publishedAt", e.target.value)}
+              className="mt-1.5"
+            />
           </div>
           <div>
             <Label htmlFor="a-doi">DOI (optional)</Label>
-            <Input id="a-doi" value={form.doi} onChange={(e) => set("doi", e.target.value)} placeholder="10.1234/awlel.2025.01" className="mt-1.5" aria-invalid={err("doi") ? true : undefined} aria-describedby="a-doi-error" />
+            <Input
+              id="a-doi"
+              value={form.doi}
+              onChange={(e) => set("doi", e.target.value)}
+              placeholder="10.1234/awlel.2025.01"
+              className="mt-1.5"
+              aria-invalid={err("doi") ? true : undefined}
+              aria-describedby="a-doi-error"
+            />
             <FieldError id="a-doi-error">{err("doi")}</FieldError>
           </div>
           <fieldset>
@@ -289,7 +369,12 @@ export function ArticleEditor({
                 ] as const
               ).map(([value, label]) => (
                 <label key={value} className="flex items-center gap-2">
-                  <input type="radio" name="citationStyle" checked={form.citationStyle === value} onChange={() => set("citationStyle", value)} />
+                  <input
+                    type="radio"
+                    name="citationStyle"
+                    checked={form.citationStyle === value}
+                    onChange={() => set("citationStyle", value)}
+                  />
                   {label}
                 </label>
               ))}
@@ -297,7 +382,14 @@ export function ArticleEditor({
           </fieldset>
           <div className="md:col-span-2">
             <Label htmlFor="a-keywords">Keywords</Label>
-            <Input id="a-keywords" value={form.keywords} onChange={(e) => set("keywords", e.target.value)} placeholder="memory, migration, Nigerian fiction" className="mt-1.5" aria-describedby="a-keywords-hint a-keywords-error" />
+            <Input
+              id="a-keywords"
+              value={form.keywords}
+              onChange={(e) => set("keywords", e.target.value)}
+              placeholder="memory, migration, Nigerian fiction"
+              className="mt-1.5"
+              aria-describedby="a-keywords-hint a-keywords-error"
+            />
             <p id="a-keywords-hint" className="mt-1 text-xs text-ink-muted">
               Separate keywords with commas.
             </p>
@@ -308,7 +400,13 @@ export function ArticleEditor({
               Abstract
             </p>
             <div className="mt-1.5">
-              <RichTextEditor id="a-abstract" labelledBy="a-abstract-label" value={form.abstract} onChange={(v) => set("abstract", v)} allowHeadings={false} />
+              <RichTextEditor
+                id="a-abstract"
+                labelledBy="a-abstract-label"
+                value={form.abstract}
+                onChange={(v) => set("abstract", v)}
+                allowHeadings={false}
+              />
             </div>
           </div>
         </div>
@@ -330,7 +428,9 @@ export function ArticleEditor({
             <Plus aria-hidden /> Add author
           </Button>
         </div>
-        <p className="text-sm text-ink-muted">Drag or use the arrows to set the author order. Emails are private unless you tick “Show email”.</p>
+        <p className="text-sm text-ink-muted">
+          Drag or use the arrows to set the author order. Emails are private unless you tick “Show email”.
+        </p>
         <FieldError id="authors-error">{err("authors")}</FieldError>
         <SortableList
           items={authors}
@@ -346,27 +446,52 @@ export function ArticleEditor({
                 <Label htmlFor={`au-${a.key}-name`} className="text-xs">
                   Name
                 </Label>
-                <Input id={`au-${a.key}-name`} value={a.fullName} onChange={(e) => setAuthor(a.key, { fullName: e.target.value })} className="mt-1 h-9" aria-invalid={err(`authors.${i}.fullName`) ? true : undefined} />
+                <Input
+                  id={`au-${a.key}-name`}
+                  value={a.fullName}
+                  onChange={(e) => setAuthor(a.key, { fullName: e.target.value })}
+                  className="mt-1 h-9"
+                  aria-invalid={err(`authors.${i}.fullName`) ? true : undefined}
+                />
                 <FieldError id={`au-${a.key}-name-error`}>{err(`authors.${i}.fullName`)}</FieldError>
               </div>
               <div>
                 <Label htmlFor={`au-${a.key}-aff`} className="text-xs">
                   Affiliation
                 </Label>
-                <Input id={`au-${a.key}-aff`} value={a.affiliation} onChange={(e) => setAuthor(a.key, { affiliation: e.target.value })} className="mt-1 h-9" />
+                <Input
+                  id={`au-${a.key}-aff`}
+                  value={a.affiliation}
+                  onChange={(e) => setAuthor(a.key, { affiliation: e.target.value })}
+                  className="mt-1 h-9"
+                />
               </div>
               <div>
                 <Label htmlFor={`au-${a.key}-email`} className="text-xs">
                   Email
                 </Label>
-                <Input id={`au-${a.key}-email`} type="email" value={a.email} onChange={(e) => setAuthor(a.key, { email: e.target.value })} className="mt-1 h-9" aria-invalid={err(`authors.${i}.email`) ? true : undefined} />
+                <Input
+                  id={`au-${a.key}-email`}
+                  type="email"
+                  value={a.email}
+                  onChange={(e) => setAuthor(a.key, { email: e.target.value })}
+                  className="mt-1 h-9"
+                  aria-invalid={err(`authors.${i}.email`) ? true : undefined}
+                />
                 <FieldError id={`au-${a.key}-email-error`}>{err(`authors.${i}.email`)}</FieldError>
               </div>
               <div>
                 <Label htmlFor={`au-${a.key}-orcid`} className="text-xs">
                   ORCID
                 </Label>
-                <Input id={`au-${a.key}-orcid`} value={a.orcid} onChange={(e) => setAuthor(a.key, { orcid: e.target.value })} placeholder="0000-0000-0000-0000" className="mt-1 h-9" aria-invalid={err(`authors.${i}.orcid`) ? true : undefined} />
+                <Input
+                  id={`au-${a.key}-orcid`}
+                  value={a.orcid}
+                  onChange={(e) => setAuthor(a.key, { orcid: e.target.value })}
+                  placeholder="0000-0000-0000-0000"
+                  className="mt-1 h-9"
+                  aria-invalid={err(`authors.${i}.orcid`) ? true : undefined}
+                />
                 <FieldError id={`au-${a.key}-orcid-error`}>{err(`authors.${i}.orcid`)}</FieldError>
               </div>
               <div className="flex items-end gap-1">
@@ -387,10 +512,21 @@ export function ArticleEditor({
               </div>
               <div className="flex flex-wrap gap-4 text-xs text-ink-muted md:col-span-5">
                 <label className="flex items-center gap-1.5">
-                  <input type="checkbox" checked={a.showEmail} onChange={(e) => setAuthor(a.key, { showEmail: e.target.checked })} /> Show email publicly
+                  <input
+                    type="checkbox"
+                    checked={a.showEmail}
+                    onChange={(e) => setAuthor(a.key, { showEmail: e.target.checked })}
+                  />{" "}
+                  Show email publicly
                 </label>
                 <label className="flex items-center gap-1.5">
-                  <input type="radio" name="corresponding" checked={a.isCorresponding} onChange={() => setAuthor(a.key, { isCorresponding: true })} /> Corresponding author
+                  <input
+                    type="radio"
+                    name="corresponding"
+                    checked={a.isCorresponding}
+                    onChange={() => setAuthor(a.key, { isCorresponding: true })}
+                  />{" "}
+                  Corresponding author
                 </label>
               </div>
             </div>
@@ -410,12 +546,29 @@ export function ArticleEditor({
           <h2 id="files-title" className="text-lg font-semibold">
             Files
           </h2>
-          <p className="text-sm text-ink-muted">The final formatted PDF and Word versions readers download. A missing format simply isn&rsquo;t offered.</p>
-          <FileSlot slot="article_pdf" entityId={article.id} version={version} onVersion={setVersion} current={article.files.article_pdf} />
-          <FileSlot slot="article_docx" entityId={article.id} version={version} onVersion={setVersion} current={article.files.article_docx} />
+          <p className="text-sm text-ink-muted">
+            The final formatted PDF and Word versions readers download. A missing format simply isn&rsquo;t
+            offered.
+          </p>
+          <FileSlot
+            slot="article_pdf"
+            entityId={article.id}
+            version={version}
+            onVersion={setVersion}
+            current={article.files.article_pdf}
+          />
+          <FileSlot
+            slot="article_docx"
+            entityId={article.id}
+            version={version}
+            onVersion={setVersion}
+            current={article.files.article_docx}
+          />
         </section>
       ) : (
-        <p className="text-sm text-ink-muted">You can upload the PDF and Word files after creating the draft.</p>
+        <p className="text-sm text-ink-muted">
+          You can upload the PDF and Word files after creating the draft.
+        </p>
       )}
 
       <ConfirmDialog

@@ -20,6 +20,9 @@ export interface ExistingArticle {
   version: number;
   title: string;
   firstPage: number | null;
+  lastPage: number | null;
+  categoryId: string | null;
+  citationStyle: "apa7" | "mla8";
   authors: string[];
 }
 
@@ -82,12 +85,12 @@ export function BulkUploader({
       title: a.title,
       authors: a.authors.join("; "),
       affiliations: "",
-      categoryId: "",
+      categoryId: a.categoryId ?? "",
       firstPage: a.firstPage ? String(a.firstPage) : "",
-      lastPage: "",
+      lastPage: a.lastPage ? String(a.lastPage) : "",
       keywords: "",
       abstract: "",
-      citationStyle: "mla8",
+      citationStyle: a.citationStyle,
       state: "created",
     })),
   );
@@ -99,8 +102,10 @@ export function BulkUploader({
   const work = rows.some((r) => !r.articleId) || files.some((f) => f.status !== "done");
   useUnsavedChanges(work && !running);
 
-  const patchRow = (key: string, patch: Partial<Row>) => setRows((list) => list.map((r) => (r.key === key ? { ...r, ...patch } : r)));
-  const patchFile = (id: string, patch: Partial<QueuedFile>) => setFiles((list) => list.map((f) => (f.id === id ? { ...f, ...patch } : f)));
+  const patchRow = (key: string, patch: Partial<Row>) =>
+    setRows((list) => list.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  const patchFile = (id: string, patch: Partial<QueuedFile>) =>
+    setFiles((list) => list.map((f) => (f.id === id ? { ...f, ...patch } : f)));
 
   const matchable = (list: Row[]) =>
     list.map((r) => ({
@@ -113,12 +118,25 @@ export function BulkUploader({
     }));
 
   function blankRow(): Row {
-    return { key: nextKey("n"), title: "", authors: "", affiliations: "", categoryId: "", firstPage: "", lastPage: "", keywords: "", abstract: "", citationStyle: "mla8", state: "ready" };
+    return {
+      key: nextKey("n"),
+      title: "",
+      authors: "",
+      affiliations: "",
+      categoryId: "",
+      firstPage: "",
+      lastPage: "",
+      keywords: "",
+      abstract: "",
+      citationStyle: "mla8",
+      state: "ready",
+    };
   }
 
   async function importCsv(file: File) {
     const { headers, rows: records } = parseCsv(await file.text());
-    if (!headers.includes("title")) return void toast.error(`The CSV needs a "title" column. Expected columns: ${CSV_COLUMNS.join(", ")}.`);
+    if (!headers.includes("title"))
+      return void toast.error(`The CSV needs a "title" column. Expected columns: ${CSV_COLUMNS.join(", ")}.`);
     const byName = (value: string) => {
       const v = value.trim().toLowerCase();
       return categories.find((c) => c.name.toLowerCase() === v || c.slug === v)?.id ?? "";
@@ -142,7 +160,9 @@ export function BulkUploader({
     setRows((list) => {
       const next = [...list, ...imported];
       // Re-match any files already dropped against the new rows.
-      setFiles((fs) => fs.map((f) => (f.rowKey ? f : { ...f, rowKey: matchFileToRow(f.file.name, matchable(next)) })));
+      setFiles((fs) =>
+        fs.map((f) => (f.rowKey ? f : { ...f, rowKey: matchFileToRow(f.file.name, matchable(next)) })),
+      );
       return next;
     });
     toast.success(`${imported.length} articles imported from the CSV.`);
@@ -157,7 +177,14 @@ export function BulkUploader({
         toast.error(problem);
         continue;
       }
-      added.push({ id: nextKey("f"), file, slot, rowKey: matchFileToRow(file.name, matchable(rows)), status: "waiting", progress: 0 });
+      added.push({
+        id: nextKey("f"),
+        file,
+        slot,
+        rowKey: matchFileToRow(file.name, matchable(rows)),
+        status: "waiting",
+        progress: 0,
+      });
     }
     setFiles((fs) => [...fs, ...added]);
   }
@@ -171,17 +198,29 @@ export function BulkUploader({
       categoryId: row.categoryId,
       title: row.title,
       slug: slugify(row.title),
-      abstract: row.abstract ? `<p>${row.abstract.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n{2,}/g, "</p><p>")}</p>` : "",
-      keywords: row.keywords.split(/[,;]/).map((k) => k.trim()).filter(Boolean),
+      abstract: row.abstract
+        ? `<p>${row.abstract
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/\n{2,}/g, "</p><p>")}</p>`
+        : "",
+      keywords: row.keywords
+        .split(/[,;]/)
+        .map((k) => k.trim())
+        .filter(Boolean),
       firstPage: row.firstPage,
       lastPage: row.lastPage,
       doi: "",
       citationStyle: row.citationStyle,
       publishedAt: "",
-      authors: authors.map((name, i) => ({ fullName: name, affiliation: affiliations[i] ?? affiliations[0] ?? "", isCorresponding: i === 0 })),
+      authors: authors.map((name, i) => ({
+        fullName: name,
+        affiliation: affiliations[i] ?? affiliations[0] ?? "",
+        isCorresponding: i === 0,
+      })),
     });
     if (!r.ok || !r.data) {
-      const detail = r.ok ? "" : Object.values(r.fieldErrors ?? {})[0] ?? r.message;
+      const detail = r.ok ? "" : (Object.values(r.fieldErrors ?? {})[0] ?? r.message);
       patchRow(row.key, { state: "error", error: detail || "Could not create" });
       return null;
     }
@@ -191,7 +230,10 @@ export function BulkUploader({
 
   async function start() {
     const unmatched = files.filter((f) => f.status !== "done" && !f.rowKey);
-    if (unmatched.length) return void toast.error(`Choose an article for ${unmatched.length} unmatched file${unmatched.length === 1 ? "" : "s"} first.`);
+    if (unmatched.length)
+      return void toast.error(
+        `Choose an article for ${unmatched.length} unmatched file${unmatched.length === 1 ? "" : "s"} first.`,
+      );
     setRunning(true);
 
     // 1. Create the new articles one at a time (each is a small transaction).
@@ -207,7 +249,8 @@ export function BulkUploader({
     // 2. Upload: at most PARALLEL_UPLOADS articles at once; one article's
     //    files go one after another, since each upload bumps its version.
     const groups = new Map<string, QueuedFile[]>();
-    for (const f of files) if (f.status !== "done" && f.rowKey) groups.set(f.rowKey, [...(groups.get(f.rowKey) ?? []), f]);
+    for (const f of files)
+      if (f.status !== "done" && f.rowKey) groups.set(f.rowKey, [...(groups.get(f.rowKey) ?? []), f]);
     const queue = [...groups.entries()];
     let failed = 0;
     const worker = async () => {
@@ -221,7 +264,9 @@ export function BulkUploader({
             continue;
           }
           patchFile(f.id, { status: "uploading", progress: 0, message: undefined });
-          const r = await uploadToSlot(f.slot, target.id, f.file, target.version, (p) => patchFile(f.id, { progress: p }));
+          const r = await uploadToSlot(f.slot, target.id, f.file, target.version, (p) =>
+            patchFile(f.id, { progress: p }),
+          );
           if (r.ok && r.data) {
             target.version = r.data.version;
             patchFile(f.id, { status: "done", progress: 1 });
@@ -235,7 +280,10 @@ export function BulkUploader({
     };
     await Promise.all(Array.from({ length: PARALLEL_UPLOADS }, worker));
     setRunning(false);
-    if (failed) toast.error(`${failed} file${failed === 1 ? "" : "s"} failed. Fix the problem and press Start again to retry only those.`);
+    if (failed)
+      toast.error(
+        `${failed} file${failed === 1 ? "" : "s"} failed. Fix the problem and press Start again to retry only those.`,
+      );
     else toast.success("All done. The new articles are saved as drafts.");
   }
 
@@ -246,13 +294,16 @@ export function BulkUploader({
     <div className="mt-6 space-y-8">
       <ol className="grid gap-3 text-sm text-ink-muted md:grid-cols-3">
         <li className="rounded-lg border border-line bg-white p-4">
-          <strong className="text-ink">1. Articles.</strong> Import a CSV of article details, or add rows by hand. Existing articles in {issueLabel} are listed too.
+          <strong className="text-ink">1. Articles.</strong> Import a CSV of article details, or add rows by
+          hand. Existing articles in {issueLabel} are listed too.
         </li>
         <li className="rounded-lg border border-line bg-white p-4">
-          <strong className="text-ink">2. Files.</strong> Drop all the PDF and Word files. Each is matched to an article by file name; fix any that aren&rsquo;t.
+          <strong className="text-ink">2. Files.</strong> Drop all the PDF and Word files. Each is matched to
+          an article by file name; fix any that aren&rsquo;t.
         </li>
         <li className="rounded-lg border border-line bg-white p-4">
-          <strong className="text-ink">3. Start.</strong> New articles are created as drafts and files upload three at a time. Publish from the issue page when you&rsquo;re happy.
+          <strong className="text-ink">3. Start.</strong> New articles are created as drafts and files upload
+          three at a time. Publish from the issue page when you&rsquo;re happy.
         </li>
       </ol>
 
@@ -278,16 +329,24 @@ export function BulkUploader({
                 if (f) void importCsv(f);
               }}
             />
-            <Button variant="outline" size="sm" onClick={() => setRows((l) => [...l, blankRow()])} disabled={running}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setRows((l) => [...l, blankRow()])}
+              disabled={running}
+            >
               <Plus aria-hidden /> Add row
             </Button>
           </div>
         </div>
         <p className="text-xs text-ink-muted">
-          CSV columns: {CSV_COLUMNS.join(", ")}. Separate several authors (and their affiliations) with semicolons.
+          CSV columns: {CSV_COLUMNS.join(", ")}. Separate several authors (and their affiliations) with
+          semicolons.
         </p>
         {rows.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-line bg-white p-6 text-center text-sm text-ink-muted">No articles yet.</p>
+          <p className="rounded-lg border border-dashed border-line bg-white p-6 text-center text-sm text-ink-muted">
+            No articles yet.
+          </p>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-line bg-white">
             <table className="w-full min-w-[56rem] text-sm">
@@ -308,14 +367,32 @@ export function BulkUploader({
                   return (
                     <tr key={r.key} className="align-top">
                       <td className="px-3 py-2">
-                        <Input aria-label="Title" value={r.title} disabled={locked} onChange={(e) => patchRow(r.key, { title: e.target.value })} className="h-9" />
+                        <Input
+                          aria-label="Title"
+                          value={r.title}
+                          disabled={locked}
+                          onChange={(e) => patchRow(r.key, { title: e.target.value })}
+                          className="h-9"
+                        />
                         {r.error ? <p className="mt-1 text-xs text-coral-ink">{r.error}</p> : null}
                       </td>
                       <td className="px-3 py-2">
-                        <Input aria-label="Authors" value={r.authors} disabled={locked} onChange={(e) => patchRow(r.key, { authors: e.target.value })} className="h-9" />
+                        <Input
+                          aria-label="Authors"
+                          value={r.authors}
+                          disabled={locked}
+                          onChange={(e) => patchRow(r.key, { authors: e.target.value })}
+                          className="h-9"
+                        />
                       </td>
                       <td className="px-3 py-2">
-                        <NativeSelect aria-label="Category" value={r.categoryId} disabled={locked} onChange={(e) => patchRow(r.key, { categoryId: e.target.value })} className="h-9">
+                        <NativeSelect
+                          aria-label="Category"
+                          value={r.categoryId}
+                          disabled={locked}
+                          onChange={(e) => patchRow(r.key, { categoryId: e.target.value })}
+                          className="h-9"
+                        >
                           <option value="">—</option>
                           {categories.map((c) => (
                             <option key={c.id} value={c.id}>
@@ -326,12 +403,34 @@ export function BulkUploader({
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex gap-1">
-                          <Input aria-label="First page" value={r.firstPage} disabled={locked} onChange={(e) => patchRow(r.key, { firstPage: e.target.value })} className="h-9" inputMode="numeric" />
-                          <Input aria-label="Last page" value={r.lastPage} disabled={locked} onChange={(e) => patchRow(r.key, { lastPage: e.target.value })} className="h-9" inputMode="numeric" />
+                          <Input
+                            aria-label="First page"
+                            value={r.firstPage}
+                            disabled={locked}
+                            onChange={(e) => patchRow(r.key, { firstPage: e.target.value })}
+                            className="h-9"
+                            inputMode="numeric"
+                          />
+                          <Input
+                            aria-label="Last page"
+                            value={r.lastPage}
+                            disabled={locked}
+                            onChange={(e) => patchRow(r.key, { lastPage: e.target.value })}
+                            className="h-9"
+                            inputMode="numeric"
+                          />
                         </div>
                       </td>
                       <td className="px-3 py-2">
-                        <NativeSelect aria-label="Citation style" value={r.citationStyle} disabled={locked} onChange={(e) => patchRow(r.key, { citationStyle: e.target.value as "apa7" | "mla8" })} className="h-9 w-24">
+                        <NativeSelect
+                          aria-label="Citation style"
+                          value={r.citationStyle}
+                          disabled={locked}
+                          onChange={(e) =>
+                            patchRow(r.key, { citationStyle: e.target.value as "apa7" | "mla8" })
+                          }
+                          className="h-9 w-24"
+                        >
                           <option value="mla8">MLA</option>
                           <option value="apa7">APA</option>
                         </NativeSelect>
@@ -339,7 +438,9 @@ export function BulkUploader({
                       <td className="px-3 py-2 text-xs">
                         {r.articleId ? (
                           <Link href={`/admin/articles/${r.articleId}`} className="font-medium">
-                            {r.state === "created" && !existing.some((e) => e.id === r.articleId) ? "Created" : "Existing"}
+                            {r.state === "created" && !existing.some((e) => e.id === r.articleId)
+                              ? "Created"
+                              : "Existing"}
                           </Link>
                         ) : r.state === "creating" ? (
                           "Creating…"
@@ -356,7 +457,9 @@ export function BulkUploader({
                             disabled={running}
                             onClick={() => {
                               setRows((l) => l.filter((x) => x.key !== r.key));
-                              setFiles((fs) => fs.map((f) => (f.rowKey === r.key ? { ...f, rowKey: null } : f)));
+                              setFiles((fs) =>
+                                fs.map((f) => (f.rowKey === r.key ? { ...f, rowKey: null } : f)),
+                              );
                             }}
                             className="rounded p-1.5 text-ink-muted hover:bg-paper hover:text-coral-ink"
                             aria-label={`Remove row ${r.title || "untitled"}`}
@@ -397,12 +500,20 @@ export function BulkUploader({
           <Upload aria-hidden className="size-6 text-ink-muted" />
           <p>
             Drop article PDF and Word files here, or{" "}
-            <button type="button" className="font-semibold text-navy underline" onClick={() => fileInput.current?.click()} disabled={running}>
+            <button
+              type="button"
+              className="font-semibold text-navy underline"
+              onClick={() => fileInput.current?.click()}
+              disabled={running}
+            >
               choose files
             </button>
             .
           </p>
-          <p className="text-xs text-ink-muted">Up to 50 MB each. File names containing the first author&rsquo;s surname or the first page number match automatically.</p>
+          <p className="text-xs text-ink-muted">
+            Up to 50 MB each. File names containing the first author&rsquo;s surname or the first page number
+            match automatically.
+          </p>
           <input
             ref={fileInput}
             type="file"
@@ -421,9 +532,14 @@ export function BulkUploader({
         {files.length > 0 ? (
           <ul className="divide-y divide-line rounded-lg border border-line bg-white" aria-live="polite">
             {files.map((f) => (
-              <li key={f.id} className="grid items-center gap-3 px-4 py-2.5 text-sm md:grid-cols-[1.4fr_1.6fr_10rem_auto]">
+              <li
+                key={f.id}
+                className="grid items-center gap-3 px-4 py-2.5 text-sm md:grid-cols-[1.4fr_1.6fr_10rem_auto]"
+              >
                 <span className="min-w-0 truncate" title={f.file.name}>
-                  <span className="mr-2 rounded bg-paper px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase">{f.slot === "article_pdf" ? "PDF" : "Word"}</span>
+                  <span className="mr-2 rounded bg-paper px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase">
+                    {f.slot === "article_pdf" ? "PDF" : "Word"}
+                  </span>
                   {f.file.name}
                 </span>
                 <NativeSelect
@@ -444,7 +560,10 @@ export function BulkUploader({
                   {f.status === "uploading" ? (
                     <span className="flex items-center gap-2">
                       <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
-                        <span className="block h-full bg-royal" style={{ width: `${Math.round(f.progress * 100)}%` }} />
+                        <span
+                          className="block h-full bg-royal"
+                          style={{ width: `${Math.round(f.progress * 100)}%` }}
+                        />
                       </span>
                       <span className="w-9 text-xs text-ink-muted">{Math.round(f.progress * 100)}%</span>
                     </span>
@@ -487,7 +606,8 @@ export function BulkUploader({
           {running ? "Working…" : "Start"}
         </Button>
         <span className="text-sm text-ink-muted">
-          {pendingRows} new {pendingRows === 1 ? "article" : "articles"} to create · {pendingFiles} {pendingFiles === 1 ? "file" : "files"} to upload
+          {pendingRows} new {pendingRows === 1 ? "article" : "articles"} to create · {pendingFiles}{" "}
+          {pendingFiles === 1 ? "file" : "files"} to upload
         </span>
         <Link href={`/admin/issues/${issueId}`} className="ml-auto text-sm font-semibold">
           Back to the issue →

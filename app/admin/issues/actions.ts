@@ -16,7 +16,9 @@ const volumeSchema = z.object({
 });
 
 /** Volume number and year are entered separately: older years may not follow the pattern. */
-export async function createVolume(input: z.input<typeof volumeSchema>): Promise<ActionResult<{ id: string }>> {
+export async function createVolume(
+  input: z.input<typeof volumeSchema>,
+): Promise<ActionResult<{ id: string }>> {
   if (!(await userWithRole(STAFF))) return forbiddenResult;
   const parsed = volumeSchema.safeParse(input);
   if (!parsed.success) return invalid(parsed.error);
@@ -28,7 +30,11 @@ export async function createVolume(input: z.input<typeof volumeSchema>): Promise
     .single();
   if (error) {
     return error.code === "23505"
-      ? { ok: false, message: `Volume ${parsed.data.volumeNumber} already exists.`, fieldErrors: { volumeNumber: "Already exists" } }
+      ? {
+          ok: false,
+          message: `Volume ${parsed.data.volumeNumber} already exists.`,
+          fieldErrors: { volumeNumber: "Already exists" },
+        }
       : fromDbError(error, "volume");
   }
   return { ok: true, message: `Volume ${parsed.data.volumeNumber} created.`, data: { id: data.id } };
@@ -38,8 +44,12 @@ export async function deleteVolume(id: string): Promise<ActionResult> {
   if (!(await userWithRole(STAFF))) return forbiddenResult;
   if (!z.uuid().safeParse(id).success) return { ok: false, message: "Invalid request." };
   const supabase = await createSupabaseServerClient();
-  const { count } = await supabase.from("issues").select("id", { count: "exact", head: true }).eq("volume_id", id);
-  if (count) return { ok: false, message: "Only an empty volume can be deleted. Move or delete its issues first." };
+  const { count } = await supabase
+    .from("issues")
+    .select("id", { count: "exact", head: true })
+    .eq("volume_id", id);
+  if (count)
+    return { ok: false, message: "Only an empty volume can be deleted. Move or delete its issues first." };
   const { error } = await supabase.from("volumes").delete().eq("id", id);
   if (error) return fromDbError(error, "volume");
   return { ok: true, message: "Volume deleted." };
@@ -52,7 +62,9 @@ const issueCreateSchema = z.object({
   legacyNumber: z.coerce.number().int().min(1).max(9999).optional(),
 });
 
-export async function createIssue(input: z.input<typeof issueCreateSchema>): Promise<ActionResult<{ id: string }>> {
+export async function createIssue(
+  input: z.input<typeof issueCreateSchema>,
+): Promise<ActionResult<{ id: string }>> {
   if (!(await userWithRole(STAFF))) return forbiddenResult;
   const parsed = issueCreateSchema.safeParse(input);
   if (!parsed.success) return invalid(parsed.error);
@@ -69,14 +81,21 @@ export async function createIssue(input: z.input<typeof issueCreateSchema>): Pro
     .single();
   if (error) {
     return error.code === "23505"
-      ? { ok: false, message: `Issue ${parsed.data.issueNumber} already exists in this volume.`, fieldErrors: { issueNumber: "Already exists" } }
+      ? {
+          ok: false,
+          message: `Issue ${parsed.data.issueNumber} already exists in this volume.`,
+          fieldErrors: { issueNumber: "Already exists" },
+        }
       : fromDbError(error, "issue");
   }
   return { ok: true, message: "Draft issue created.", data: { id: data.id } };
 }
 
 const optionalInt = (min: number, max: number) =>
-  z.preprocess((v) => (v === "" || v === null || v === undefined ? null : v), z.coerce.number().int().min(min).max(max).nullable());
+  z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? null : v),
+    z.coerce.number().int().min(min).max(max).nullable(),
+  );
 
 const issueSchema = z.object({
   id: z.uuid(),
@@ -90,7 +109,9 @@ const issueSchema = z.object({
   publishedAt: z.union([z.literal(""), z.iso.date()]).optional(),
 });
 
-export async function saveIssue(input: z.input<typeof issueSchema>): Promise<ActionResult<{ version: number }>> {
+export async function saveIssue(
+  input: z.input<typeof issueSchema>,
+): Promise<ActionResult<{ version: number }>> {
   if (!(await userWithRole(STAFF))) return forbiddenResult;
   const parsed = issueSchema.safeParse(input);
   if (!parsed.success) return invalid(parsed.error);
@@ -113,7 +134,11 @@ export async function saveIssue(input: z.input<typeof issueSchema>): Promise<Act
     .maybeSingle();
   if (error) {
     return error.code === "23505"
-      ? { ok: false, message: "Another issue in this volume already has that number.", fieldErrors: { issueNumber: "Already used" } }
+      ? {
+          ok: false,
+          message: "Another issue in this volume already has that number.",
+          fieldErrors: { issueNumber: "Already used" },
+        }
       : fromDbError(error, "issue");
   }
   if (!data) return conflict();
@@ -129,7 +154,12 @@ export async function setIssueStatus(input: {
 }): Promise<ActionResult<{ version: number }>> {
   if (!(await userWithRole(STAFF))) return forbiddenResult;
   const parsed = z
-    .object({ id: z.uuid(), expectedVersion: z.number().int(), status: z.enum(["draft", "published"]), includeArticles: z.boolean().optional() })
+    .object({
+      id: z.uuid(),
+      expectedVersion: z.number().int(),
+      status: z.enum(["draft", "published"]),
+      includeArticles: z.boolean().optional(),
+    })
     .safeParse(input);
   if (!parsed.success) return { ok: false, message: "Invalid request." };
   const supabase = await createSupabaseServerClient();
@@ -141,22 +171,38 @@ export async function setIssueStatus(input: {
   });
   if (error) return fromDbError(error, "issue");
   const { data: articles } = await supabase.from("articles").select("id").eq("issue_id", parsed.data.id);
-  expireCatalog({ issueIds: [parsed.data.id], articleIds: (articles ?? []).map((a) => a.id), categories: true });
+  expireCatalog({
+    issueIds: [parsed.data.id],
+    articleIds: (articles ?? []).map((a) => a.id),
+    categories: true,
+  });
   return {
     ok: true,
-    message: parsed.data.status === "published" ? "Issue published. It's now live on the site." : "Issue unpublished. It's hidden from the site.",
+    message:
+      parsed.data.status === "published"
+        ? "Issue published. It's now live on the site."
+        : "Issue unpublished. It's hidden from the site.",
     data: { version: data },
   };
 }
 
-export async function setIssueDeleted(input: { id: string; expectedVersion: number; deleted: boolean }): Promise<ActionResult<{ version: number }>> {
+export async function setIssueDeleted(input: {
+  id: string;
+  expectedVersion: number;
+  deleted: boolean;
+}): Promise<ActionResult<{ version: number }>> {
   if (!(await userWithRole(STAFF))) return forbiddenResult;
-  const parsed = z.object({ id: z.uuid(), expectedVersion: z.number().int(), deleted: z.boolean() }).safeParse(input);
+  const parsed = z
+    .object({ id: z.uuid(), expectedVersion: z.number().int(), deleted: z.boolean() })
+    .safeParse(input);
   if (!parsed.success) return { ok: false, message: "Invalid request." };
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("issues")
-    .update({ deleted_at: parsed.data.deleted ? new Date().toISOString() : null, ...(parsed.data.deleted ? { status: "draft" as const } : {}) })
+    .update({
+      deleted_at: parsed.data.deleted ? new Date().toISOString() : null,
+      ...(parsed.data.deleted ? { status: "draft" as const } : {}),
+    })
     .eq("id", parsed.data.id)
     .eq("version", parsed.data.expectedVersion)
     .select("version")
@@ -164,7 +210,11 @@ export async function setIssueDeleted(input: { id: string; expectedVersion: numb
   if (error) return fromDbError(error, "issue");
   if (!data) return conflict();
   expireCatalog({ issueIds: [parsed.data.id], categories: true });
-  return { ok: true, message: parsed.data.deleted ? "Issue moved to trash. You can restore it." : "Issue restored as a draft.", data: { version: data.version } };
+  return {
+    ok: true,
+    message: parsed.data.deleted ? "Issue moved to trash. You can restore it." : "Issue restored as a draft.",
+    data: { version: data.version },
+  };
 }
 
 export async function reorderIssueArticles(input: { issueId: string; ids: string[] }): Promise<ActionResult> {

@@ -12,12 +12,16 @@ async function Content() {
   await requireRole(STAFF_ROLES, "/admin/categories");
   const supabase = await createSupabaseServerClient();
   const [cats, arts] = await Promise.all([
-    supabase.from("categories").select("id, name, slug, description, is_archived, version, sort_order").order("sort_order"),
+    supabase
+      .from("categories")
+      .select("id, name, slug, description, is_archived, version, sort_order")
+      .order("sort_order"),
     supabase.from("articles").select("category_id").is("deleted_at", null),
   ]);
   if (cats.error || arts.error) throw new Error("Could not load categories");
   const counts = new Map<string, number>();
-  for (const a of arts.data) if (a.category_id) counts.set(a.category_id, (counts.get(a.category_id) ?? 0) + 1);
+  for (const a of arts.data)
+    if (a.category_id) counts.set(a.category_id, (counts.get(a.category_id) ?? 0) + 1);
   return (
     <CategoriesManager
       initial={cats.data.map((c) => ({

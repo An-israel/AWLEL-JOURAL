@@ -40,13 +40,13 @@ through a Postgres job queue drained by cron. There are no other services.
 | 15  | Message queues           | BUILD      | `jobs` table (migration 3)             | 🟡 M1 | Postgres table queue: no new vendor, transactional with the data it describes. Workers in M8. |
 | 16  | Pub/Sub                  | BUILD      | Supabase Realtime                      | ⏳ M8 | Staff get live notices for new submissions, reviews, messages. |
 | 17  | Event-driven architecture | BUILD     | `domain_events` table                  | 🟡 M1 | Table exists; events are written by each feature and fanned out to jobs in M8. |
-| 18  | Distributed transactions | BUILD      | publish flow                            | ⏳ M5 | No 2PC. Files are uploaded first under a new path; the DB row is switched in one transaction; storage is never the source of truth. |
-| 19  | Saga pattern             | BUILD      | publish / upload flows                  | ⏳ M5 | Each step has a compensation (e.g. delete orphaned upload if the DB write fails). |
+| 18  | Distributed transactions | BUILD      | `lib/admin/uploads.ts`, `save_article()`, `set_issue_status()` | ✅ M5 | No two-phase commit. Database changes that belong together run in one SQL function (article + authors; issue + its articles). Files are written to a new storage path first; the database is then pointed at them. Storage is never the source of truth. |
+| 19  | Saga pattern             | BUILD      | `attachUpload()` in `lib/admin/uploads.ts` | ✅ M5 | Upload → verify object → record `stored_files` → point entity at it. If either database step fails, the compensations delete the row and the uploaded object. |
 | 20  | Dead letter queues       | BUILD      | `dead_letter_jobs` table, admin screen  | 🟡 M1 | Table + RLS (Super Admin read/resolve) now; screen in M8. |
 | 21  | Cron jobs                | BUILD      | `vercel.json` crons                     | ⏳ M8 | Queue drain, review reminders, metrics rollup, orphan cleanup, weekly backup export. |
 | 22  | WebSockets               | PLATFORM   | Supabase Realtime                      | ⏳ M8 | |
 | 23  | Long polling             | NOT NEEDED | —                                      | ✅    | Realtime covers live updates; if a browser can't hold a WebSocket, the admin falls back to refreshing on focus. |
-| 24  | Server-sent events       | BUILD/DOC  | bulk upload                             | ⏳ M5 | Uploads go browser → Storage directly, so progress is known in the browser; SSE unnecessary. Documented then. |
+| 24  | Server-sent events       | DOC        | bulk upload | ✅ M5 | Not needed: uploads go straight from the browser to Storage, so progress comes from the upload itself (XHR progress events). |
 
 ## Database
 
@@ -63,11 +63,11 @@ through a Postgres job queue drained by cron. There are no other services.
 | 33  | Leader election      | NOT NEEDED | —                                       | ✅    | Cron jobs take a Postgres advisory lock so only one run proceeds (item 38). |
 | 34  | CAP theorem          | DOC        | this file                               | ✅    | Single-region Postgres: we choose consistency. If the DB is unreachable, writes fail clearly while cached public pages keep serving. |
 | 35  | Eventual consistency | DOC        | this file                               | 🟡    | View/download counters lag up to one rollup interval; public pages update within seconds of publishing (tag revalidation), worst case at the next revalidation window. Measured in M8. |
-| 36  | Optimistic locking   | BUILD      | `version` columns + `bump_version()`    | 🟡 M1 | DB side done: every real edit bumps `version`; system columns (search index, counters) don't. "Someone else edited this" UI in M5. |
+| 36  | Optimistic locking   | BUILD      | `version` columns, `bump_version()`, `components/admin/conflict-banner.tsx` | ✅ M5 | Every admin save sends the version it loaded; a stale save changes nothing and shows “Someone else edited this. Reload…”. Covered by an end-to-end test. |
 | 37  | Pessimistic locking  | BUILD      | job claim RPC                           | ⏳ M8 | `SELECT … FOR UPDATE SKIP LOCKED`. |
-| 38  | Distributed locks    | BUILD      | advisory locks                          | 🟡 M1 | Used today for the last-Super-Admin check; cron and issue publishing in M5/M8. |
+| 38  | Distributed locks    | BUILD      | advisory locks                          | 🟡 M5 | Last-Super-Admin check and issue publishing (`set_issue_status`) take advisory locks; cron jobs follow in M8. |
 | 39  | Race conditions      | BUILD      | constraints, triggers                   | ✅ M1 | Unique slug, unique (volume, issue), unique volume number; last-Super-Admin check serialised with an advisory lock inside the transaction; atomic upsert rate limiter; counters updated in SQL, never read-modify-write in JS. |
-| 40  | Deadlocks            | BUILD      | data layer                              | ⏳ M5 | Short transactions, consistent lock order (volume → issue → article), retry on `40P01`. |
+| 40  | Deadlocks            | BUILD      | admin SQL functions                     | 🟡 M5 | Transactions are short and touch rows in one order (issue, then its articles; article, then its authors). Retry on `40P01` arrives with the queue worker (M8). |
 
 ## Runtime health
 
@@ -76,7 +76,7 @@ through a Postgres job queue drained by cron. There are no other services.
 | 41  | Memory leaks       | BUILD  | download/upload paths | 🟡 M1 | No module-level mutable state (cached data lives in Next's cache, not globals). Files never pass through functions: uploads use signed upload URLs, downloads redirect to signed URLs. |
 | 42  | Garbage collection | DOC    | this file    | ✅    | Covered by 41: no large in-memory objects in request paths. |
 | 43  | Thread safety      | DOC    | this file    | ✅    | Each function instance is single-threaded, but many run concurrently; all shared state is in Postgres. |
-| 44  | Backpressure       | BUILD  | bulk upload, queue | ⏳ M5/M8 | Max 3 parallel uploads with a visible queue; workers claim bounded batches. |
+| 44  | Backpressure       | BUILD  | `bulk-uploader.tsx`, queue | 🟡 M5 | Bulk upload runs at most 3 uploads at once with a visible per-file queue; one article's files go one after another. Queue batches in M8. |
 
 ## Scaling and delivery
 
@@ -87,17 +87,17 @@ through a Postgres job queue drained by cron. There are no other services.
 | 47  | Vertical scaling   | PLATFORM | Supabase     | ✅    | Dashboard → Project Settings → Compute and Disk; upgrade the compute add-on (minutes of downtime). |
 | 48  | CDN                | PLATFORM | Vercel, Supabase Storage CDN | ✅ | |
 | 49  | Edge caching       | BUILD    | route config, headers | 🟡 M1 | Static pages get `s-maxage` + `stale-while-revalidate` from Next (verified: home `s-maxage=86400`). Files/images headers in M7. |
-| 50  | Cache invalidation | BUILD    | `lib/data/tags.ts` | ⏳ M5 | Every mutation calls `revalidateTag` for each affected tag (home, archive, issue, article, category, sitemap, RSS). |
+| 50  | Cache invalidation | BUILD    | `lib/admin/revalidate.ts` | ✅ M5 | Every admin mutation calls `updateTag` for the tags it affects (issues, articles, the specific issue/article, categories, pages, board, settings, flags). End-to-end tests check that published changes are live immediately. |
 
 ## Releases
 
 | #   | Item                 | Status   | Where                         | State | Notes |
 | --- | -------------------- | -------- | ----------------------------- | ----- | ----- |
-| 51  | Feature flags        | BUILD    | `feature_flags` table         | 🟡 M1 | Seeded: `submissions_open` (also enforced in RLS), `reviewer_module`, `home_most_read`, `google_sign_in`. Toggle UI in M8. |
+| 51  | Feature flags        | BUILD    | `feature_flags` table         | 🟡 M1 | Seeded: `submissions_open` (also enforced in RLS), `reviewer_module`, `home_most_read`, `google_sign_in`. Toggled in Admin → Settings (M5). |
 | 52  | Blue-green           | PLATFORM | Vercel                        | ✅    | Every deployment is immutable; promotion to production is an atomic alias switch. |
 | 53  | Canary releases      | DOC      | Vercel                        | ✅    | Staff test on preview URLs. Vercel Rolling Releases (Pro plan) if available; otherwise NOT NEEDED at this traffic. |
 | 54  | Rolling deployments  | PLATFORM | Vercel                        | ✅    | |
-| 55  | Rollbacks            | BUILD    | Vercel, `supabase/rollbacks/`, file versions | 🟡 M1 | App: instant rollback in Vercel. DB: each migration has a `.down.sql`; CI applies all reversals then re-applies migrations. Files: previous versions kept in `stored_files` (UI in M5). |
+| 55  | Rollbacks            | BUILD    | Vercel, `supabase/rollbacks/`, file versions | 🟡 M1 | App: instant rollback in Vercel. DB: each migration has a `.down.sql`; CI applies all reversals then re-applies migrations. Files: every replaced file stays in `stored_files` and can be restored from its Versions list. |
 | 56  | Health checks        | BUILD    | `/api/health`                 | ✅ M1 | Checks DB and Storage with 3s timeouts; 200 or 503 with per-check latency. |
 | 57  | Liveness / readiness | BUILD    | `/api/health/live`, `/api/health/ready` | ✅ M1 | Used by the Docker `HEALTHCHECK` and uptime monitors. |
 
@@ -134,7 +134,7 @@ through a Postgres job queue drained by cron. There are no other services.
 | 79  | XSS                   | BUILD    | `lib/security/headers.ts`                | 🟡 M1 | Strict CSP (`object-src 'none'`, `frame-ancestors 'none'`, `base-uri 'self'`). Inline scripts are allowed because nonces would make every page dynamic; sanitize-html on save and render arrives with the rich text editor (M3/M5). |
 | 80  | SSRF                  | BUILD    | —                                        | ✅    | The server makes no requests to user-supplied URLs. Allow-list helper added if ORCID lookup is built. |
 | 81  | Database migrations   | BUILD    | `supabase/migrations`, `migrate.yml`     | ✅ M1 | |
-| 82  | Schema versioning     | BUILD    | `schema_version()` RPC                   | 🟡 M1 | Shown in Admin → Settings in M5. |
+| 82  | Schema versioning     | BUILD    | `schema_version()` RPC                   | ✅ M5 | Shown at the bottom of Admin → Settings. |
 
 ### Secret rotation
 
@@ -164,7 +164,7 @@ through a Postgres job queue drained by cron. There are no other services.
 | #   | Item               | Status | Where | State | Notes |
 | --- | ------------------ | ------ | ----- | ----- | ----- |
 | 89  | Cold starts        | BUILD  | `instrumentation-client.ts` | 🟡 M1 | Sentry loads only when configured; heavy libraries kept out of public pages. Next 16 `proxy.ts` always runs on Node (edge runtime is not supported there); health routes are tiny. |
-| 90  | Serverless limits  | BUILD  | upload flows | ⏳ M5/M6 | All uploads go browser → Supabase Storage via signed upload URLs (TUS for large files). |
+| 90  | Serverless limits  | BUILD  | `lib/admin/upload-client.ts` | ✅ M5 | Files go browser → Supabase Storage through signed upload URLs (up to 100 MB per file); no file passes through a Vercel function. Resumable (TUS) uploads can be added if editors upload over unreliable connections. |
 | 91–94 | Latency, throughput, p99, tail latency | DOC | — | ⏳ M9 | Measured against the production deployment. |
 | 95  | Network partitions | DOC    | `lib/data/site-settings.ts` | 🟡 M1 | Public data loaders fall back or serve the cached page if Supabase is unreachable; admin shows "service unavailable" (M5). |
 | 96  | Clock skew         | BUILD  | migrations | ✅ M1 | All timestamps default to `now()` in Postgres; triggers set `updated_at`. |

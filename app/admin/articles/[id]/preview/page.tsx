@@ -40,7 +40,9 @@ async function Content({ params }: { params: Props["params"] }) {
             </li>
           ))}
         </ul>
-        <p className="mt-2 text-sm text-ink-muted">{[...new Set(article.authors.map((a) => a.affiliation).filter(Boolean))].join(" · ")}</p>
+        <p className="mt-2 text-sm text-ink-muted">
+          {[...new Set(article.authors.map((a) => a.affiliation).filter(Boolean))].join(" · ")}
+        </p>
         <p className="mt-4 text-sm">
           {issue?.label}
           {pages ? `, ${pages}` : ""}

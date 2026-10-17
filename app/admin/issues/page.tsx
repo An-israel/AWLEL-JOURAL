@@ -16,7 +16,11 @@ async function Content() {
   const supabase = await createSupabaseServerClient();
   const [issues, volumes, articles] = await Promise.all([
     loadAdminIssues(),
-    supabase.from("volumes").select("id, volume_number, year").order("year", { ascending: false }).order("volume_number", { ascending: false }),
+    supabase
+      .from("volumes")
+      .select("id, volume_number, year")
+      .order("year", { ascending: false })
+      .order("volume_number", { ascending: false }),
     supabase.from("articles").select("issue_id, status").is("deleted_at", null),
   ]);
   if (volumes.error || articles.error) throw new Error("Could not load volumes");
@@ -58,7 +62,11 @@ async function Content() {
                   <div key={v.id} className="mt-4 rounded-lg border border-line bg-white">
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
                       <p className="font-semibold">Volume {v.volume_number}</p>
-                      <AddIssueButton volumeId={v.id} volumeNumber={v.volume_number} nextIssue={Math.max(0, ...list.map((i) => i.issueNumber)) + 1} />
+                      <AddIssueButton
+                        volumeId={v.id}
+                        volumeNumber={v.volume_number}
+                        nextIssue={Math.max(0, ...list.map((i) => i.issueNumber)) + 1}
+                      />
                     </div>
                     {list.length === 0 ? (
                       <p className="px-4 py-4 text-sm text-ink-muted">No issues yet.</p>
@@ -67,12 +75,17 @@ async function Content() {
                         {list.map((i) => {
                           const c = counts.get(i.id) ?? { total: 0, drafts: 0 };
                           return (
-                            <li key={i.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                            <li
+                              key={i.id}
+                              className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                            >
                               <div>
                                 <Link href={`/admin/issues/${i.id}`} className="font-medium">
                                   {i.label}
                                 </Link>
-                                {i.legacyLabel ? <span className="ml-2 text-sm text-ink-muted">{i.legacyLabel}</span> : null}
+                                {i.legacyLabel ? (
+                                  <span className="ml-2 text-sm text-ink-muted">{i.legacyLabel}</span>
+                                ) : null}
                                 <p className="text-xs text-ink-muted">
                                   {c.total} articles{c.drafts ? ` · ${c.drafts} draft` : ""}
                                 </p>

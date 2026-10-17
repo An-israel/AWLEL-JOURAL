@@ -7,7 +7,13 @@ import { TAGS } from "@/lib/data/tags";
  * read-your-writes: the editor's next view, and every visitor's, gets fresh
  * data. The sitemap and RSS feed (milestone 7) read the same tags.
  */
-export function expireCatalog(opts: { issueIds?: (string | null | undefined)[]; articleIds?: (string | null | undefined)[]; categories?: boolean } = {}) {
+export function expireCatalog(
+  opts: {
+    issueIds?: (string | null | undefined)[];
+    articleIds?: (string | null | undefined)[];
+    categories?: boolean;
+  } = {},
+) {
   updateTag(TAGS.issues);
   updateTag(TAGS.articles);
   if (opts.categories) updateTag(TAGS.categories);

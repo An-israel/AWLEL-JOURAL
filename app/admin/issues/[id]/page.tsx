@@ -32,14 +32,23 @@ async function Content({ params }: { params: Props["params"] }) {
       .eq("id", id)
       .maybeSingle(),
     loadAdminIssues(),
-    supabase.from("articles").select("id, title, status, first_page, last_page").eq("issue_id", id).is("deleted_at", null).order("sort_order"),
+    supabase
+      .from("articles")
+      .select("id, title, status, first_page, last_page")
+      .eq("issue_id", id)
+      .is("deleted_at", null)
+      .order("sort_order"),
   ]);
   if (!issue) notFound();
   const meta = all.find((i) => i.id === id)!;
 
   return (
     <>
-      <AdminPageHeader title={meta.label} crumbs={[{ href: "/admin/issues", label: "Volumes and Issues" }, { label: meta.label }]} description={meta.legacyLabel ?? undefined} />
+      <AdminPageHeader
+        title={meta.label}
+        crumbs={[{ href: "/admin/issues", label: "Volumes and Issues" }, { label: meta.label }]}
+        description={meta.legacyLabel ?? undefined}
+      />
       <IssueEditor
         issue={{
           id: issue.id,
@@ -55,8 +64,17 @@ async function Content({ params }: { params: Props["params"] }) {
           editorial: issue.editorial ?? "",
           coverAlt: issue.cover_alt ?? "",
           publishedAt: issue.published_at?.slice(0, 10) ?? "",
-          files: { issue_cover: toAttached(issue.cover), issue_pdf: toAttached(issue.pdf), issue_docx: toAttached(issue.docx) },
-          articles: (articles ?? []).map((a) => ({ id: a.id, title: a.title, status: a.status, pages: pageRange(a.first_page, a.last_page) ?? "" })),
+          files: {
+            issue_cover: toAttached(issue.cover),
+            issue_pdf: toAttached(issue.pdf),
+            issue_docx: toAttached(issue.docx),
+          },
+          articles: (articles ?? []).map((a) => ({
+            id: a.id,
+            title: a.title,
+            status: a.status,
+            pages: pageRange(a.first_page, a.last_page) ?? "",
+          })),
         }}
       />
     </>
