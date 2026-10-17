@@ -1,0 +1,28 @@
+# Local development and self-hosting (item 7).
+#
+# The Supabase stack (Postgres, Auth, Storage, REST, Realtime) is started by
+# the Supabase CLI, which runs it as Docker containers from supabase/config.toml:
+#
+#   npx supabase start          # stack on 127.0.0.1:54321 (API) / 54322 (DB)
+#   docker compose up --build   # this app on http://localhost:3000
+#
+# For a full self-hosted production setup (e.g. on UNN ICT servers), run
+# Supabase's official self-hosting compose file alongside this one and point
+# the variables below at it. See docs/SELF_HOSTING.md.
+services:
+  web:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-http://127.0.0.1:54321}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:?set NEXT_PUBLIC_SUPABASE_ANON_KEY}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
+    env_file:
+      - path: .env.local
+        required: false
+    environment:
+      NODE_ENV: production
+    # Host networking lets the container reach the CLI-managed Supabase stack
+    # on 127.0.0.1, so the same URL works in the browser and on the server.
+    network_mode: host
+    restart: unless-stopped

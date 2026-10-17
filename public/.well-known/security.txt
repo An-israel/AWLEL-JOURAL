@@ -1,0 +1,4 @@
+Contact: mailto:awlel.journal@gmail.com
+Expires: 2027-10-17T00:00:00.000Z
+Preferred-Languages: en
+Policy: https://awlel.unn.edu.ng/privacy

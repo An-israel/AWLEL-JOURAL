@@ -1,0 +1,191 @@
+@import "tailwindcss";
+
+/*
+ * AWLEL design tokens (section 3). Colours come from the approved cover
+ * designs. Every component uses these tokens; no raw hex values elsewhere.
+ */
+:root {
+  --navy: #1e3a8a;
+  --navy-deep: #152a66;
+  --coral: #e9475e;
+  --coral-ink: #c42d45; /* coral darkened for text on white (AA contrast) */
+  --royal: #2e66e8;
+  --gold: #c99234;
+  --gold-dark: #8a5a1c;
+  --gold-light: #e2c48e;
+  --ink: #111111;
+  --ink-muted: #4a4a52; /* secondary text, 8.6:1 on white */
+  --paper: #f7f7f8;
+  --white: #ffffff;
+  --line: #e4e4e7;
+}
+
+@theme inline {
+  --color-navy: var(--navy);
+  --color-navy-deep: var(--navy-deep);
+  --color-coral: var(--coral);
+  --color-coral-ink: var(--coral-ink);
+  --color-royal: var(--royal);
+  --color-gold: var(--gold);
+  --color-gold-dark: var(--gold-dark);
+  --color-gold-light: var(--gold-light);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-paper: var(--paper);
+  --color-white: var(--white);
+  --color-line: var(--line);
+
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-source-serif), ui-serif, Georgia, serif;
+
+  /* Generous editorial type scale. */
+  --text-display: 3.25rem;
+  --text-display--line-height: 1.1;
+  --text-display--letter-spacing: -0.02em;
+  --text-reading: 1.125rem; /* 18px body copy on reading pages */
+  --text-reading--line-height: 1.65;
+
+  --container-reading: 70ch;
+  --container-site: 80rem;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-padding-top: 6rem;
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.6;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    color: var(--ink);
+  }
+
+  a {
+    color: var(--navy);
+    text-underline-offset: 0.2em;
+  }
+
+  /* One visible, consistent focus ring for keyboard users (WCAG 2.4.7). */
+  :focus-visible {
+    outline: 2px solid var(--royal);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--gold-light) 70%, transparent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* Long-form reading text: abstracts, About, Scope, page bodies. */
+  .prose-reading {
+    font-family: var(--font-serif);
+    font-size: var(--text-reading);
+    line-height: 1.65;
+    max-width: var(--container-reading);
+    color: var(--ink);
+  }
+  .prose-reading > * + * {
+    margin-top: 1em;
+  }
+  .prose-reading h2 {
+    font-size: 1.5rem;
+    margin-top: 2em;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--line);
+  }
+  .prose-reading h3 {
+    font-size: 1.2rem;
+    margin-top: 1.6em;
+  }
+  .prose-reading ul,
+  .prose-reading ol {
+    padding-left: 1.4em;
+  }
+  .prose-reading ul {
+    list-style: disc;
+  }
+  .prose-reading ol {
+    list-style: decimal;
+  }
+  .prose-reading li + li {
+    margin-top: 0.35em;
+  }
+  .prose-reading li::marker {
+    color: var(--gold-dark);
+  }
+  .prose-reading a {
+    text-decoration: underline;
+    text-decoration-color: var(--gold);
+  }
+  .prose-reading a:hover {
+    color: var(--royal);
+  }
+  .prose-reading blockquote {
+    border-left: 3px solid var(--gold);
+    padding-left: 1em;
+    color: var(--ink-muted);
+  }
+  /* Placeholder text seeded for the editors to replace. */
+  .prose-reading mark {
+    background: #fff4d6;
+    color: var(--gold-dark);
+    font-family: var(--font-sans);
+    font-size: 0.9em;
+    padding: 0.05em 0.3em;
+    border-radius: 3px;
+  }
+
+  /* Thin gold rule used between editorial sections. */
+  .rule-gold {
+    height: 2px;
+    border: 0;
+    background: linear-gradient(90deg, var(--gold-dark), var(--gold) 40%, var(--gold-light));
+  }
+
+  /* Diagonal cover bands (blue / black / gold), used sparingly as an accent. */
+  .accent-bands {
+    background: linear-gradient(
+      115deg,
+      var(--navy) 0 58%,
+      var(--ink) 58% 72%,
+      var(--gold) 72% 76%,
+      var(--royal) 76% 100%
+    );
+  }
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
