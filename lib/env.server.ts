@@ -23,7 +23,14 @@ let cached: z.infer<typeof schema> | undefined;
 /** Parsed lazily so `next build` can run without secrets for static checks. */
 export function serverEnv(): z.infer<typeof schema> {
   if (cached) return cached;
-  const parsed = schema.safeParse(process.env);
+  const env = process.env;
+  const parsed = schema.safeParse({
+    ...env,
+    // Names set by the Supabase–Vercel integration, accepted as fallbacks.
+    SUPABASE_SERVICE_ROLE_KEY: env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SECRET_KEY,
+    // Until METRICS_SALT is set, the integration's JWT secret is a usable secret salt.
+    METRICS_SALT: env.METRICS_SALT || env.SUPABASE_JWT_SECRET,
+  });
   if (!parsed.success) {
     throw new Error(
       `Invalid server environment variables. See .env.example.\n${z.prettifyError(parsed.error)}`,

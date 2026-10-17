@@ -61,7 +61,6 @@ export interface BoardGroup {
 export async function getEditorialBoard(): Promise<BoardGroup[]> {
   "use cache";
   cacheTag(TAGS.board);
-  cacheLife("days");
 
   const supabase = createSupabasePublicClient();
   const [groups, members] = await Promise.all([
@@ -76,8 +75,13 @@ export async function getEditorialBoard(): Promise<BoardGroup[]> {
   ]);
   if (groups.error || members.error) {
     logger.error({ err: groups.error ?? members.error }, "editorial board unavailable");
-    throw new Error("Could not load the editorial board");
+    // While building against a database that isn't ready, render empty and retry soon.
+    if (process.env.NEXT_PHASE !== "phase-production-build")
+      throw new Error("Could not load the editorial board");
+    cacheLife("minutes");
+    return [];
   }
+  cacheLife("days");
 
   return groups.data
     .map((g) => ({

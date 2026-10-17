@@ -121,6 +121,21 @@ interface ArticleRow {
   category: CategoryRef | null;
 }
 
+/**
+ * A failed read. While building (e.g. the database has not been migrated
+ * yet, or is briefly unreachable), render an empty page with a short cache
+ * life so the first request after recovery fills it in; at request time,
+ * fail loudly. Called inside `"use cache"` scopes before their cacheLife.
+ */
+function degrade<T>(what: string, error: unknown, fallback: T): T {
+  if (process.env.NEXT_PHASE === "phase-production-build") {
+    logger.warn({ err: error }, `catalog: ${what} unavailable during build; rendering empty for now`);
+    cacheLife("minutes");
+    return fallback;
+  }
+  return fail(what, error);
+}
+
 function fail(what: string, error: unknown): never {
   logger.error({ err: error }, `catalog: failed to load ${what}`);
   throw new Error(`Could not load ${what}`);
@@ -179,7 +194,6 @@ async function toSummaries(rows: ArticleRow[]): Promise<ArticleSummary[]> {
 export async function getPublishedIssues(): Promise<IssueSummary[]> {
   "use cache";
   cacheTag(TAGS.issues);
-  cacheLife("days");
 
   const { data, error } = await createSupabasePublicClient()
     .from("issues")
@@ -188,7 +202,8 @@ export async function getPublishedIssues(): Promise<IssueSummary[]> {
     )
     .eq("status", "published")
     .is("deleted_at", null);
-  if (error) fail("issues", error);
+  if (error) return degrade("issues", error, []);
+  cacheLife("days");
 
   const rows = data ?? [];
   const perVolume = new Map<number, number>();
@@ -230,21 +245,20 @@ export async function getLatestIssue(): Promise<IssueSummary | null> {
 async function issueArticles(issueId: string): Promise<ArticleSummary[]> {
   "use cache";
   cacheTag(TAGS.articles, TAGS.issue(issueId));
-  cacheLife("days");
   const { data, error } = await createSupabasePublicClient()
     .from("articles")
     .select(ARTICLE_COLUMNS)
     .eq("issue_id", issueId)
     .order("sort_order")
     .order("first_page", { nullsFirst: false });
-  if (error) fail("issue articles", error);
+  if (error) return degrade("issue articles", error, []);
+  cacheLife("days");
   return toSummaries((data ?? []) as ArticleRow[]);
 }
 
 export async function getIssue(volumeNumber: number, issueNumber: number): Promise<IssueDetail | null> {
   "use cache";
   cacheTag(TAGS.issues);
-  cacheLife("days");
 
   const issues = await getPublishedIssues();
   const index = issues.findIndex((i) => i.volumeNumber === volumeNumber && i.issueNumber === issueNumber);
@@ -259,7 +273,8 @@ export async function getIssue(volumeNumber: number, issueNumber: number): Promi
     )
     .eq("id", summary.id)
     .single();
-  if (error) fail("issue", error);
+  if (error) return degrade("issue", error, null);
+  cacheLife("days");
 
   return {
     ...summary,
@@ -286,7 +301,6 @@ export type ArticleLookup = { article: ArticleDetail } | { redirectTo: string } 
 export async function getArticleBySlug(slug: string): Promise<ArticleLookup> {
   "use cache";
   cacheTag(TAGS.articles);
-  cacheLife("days");
 
   const supabase = createSupabasePublicClient();
   const { data, error } = await supabase
@@ -296,7 +310,8 @@ export async function getArticleBySlug(slug: string): Promise<ArticleLookup> {
     )
     .eq("slug", slug)
     .maybeSingle();
-  if (error) fail("article", error);
+  if (error) return degrade("article", error, null);
+  cacheLife("days");
 
   if (!data) {
     // Renamed articles keep their old URLs (section 11).
@@ -331,9 +346,9 @@ export async function getArticleBySlug(slug: string): Promise<ArticleLookup> {
 export async function getPublishedArticleSlugs(): Promise<string[]> {
   "use cache";
   cacheTag(TAGS.articles);
-  cacheLife("days");
   const { data, error } = await createSupabasePublicClient().from("articles").select("slug");
-  if (error) fail("article slugs", error);
+  if (error) return degrade("article slugs", error, []);
+  cacheLife("days");
   return (data ?? []).map((r) => r.slug);
 }
 
@@ -342,14 +357,14 @@ export type PopularMetric = "views" | "downloads";
 export async function getPopularArticles(metric: PopularMetric, limit = 5): Promise<ArticleSummary[]> {
   "use cache";
   cacheTag(TAGS.articles);
-  cacheLife("hours");
   const { data, error } = await createSupabasePublicClient()
     .from("articles")
     .select(ARTICLE_COLUMNS)
     .order(metric === "views" ? "view_count" : "download_count", { ascending: false })
     .order("published_at", { ascending: false })
     .limit(limit);
-  if (error) fail("popular articles", error);
+  if (error) return degrade("popular articles", error, []);
+  cacheLife("hours");
   return toSummaries((data ?? []) as ArticleRow[]);
 }
 
@@ -360,9 +375,9 @@ export async function getPopularArticles(metric: PopularMetric, limit = 5): Prom
 export async function getCategoriesWithCounts(): Promise<CategoryWithCount[]> {
   "use cache";
   cacheTag(TAGS.categories, TAGS.articles);
-  cacheLife("days");
   const { data, error } = await createSupabasePublicClient().rpc("categories_with_counts");
-  if (error) fail("categories", error);
+  if (error) return degrade("categories", error, []);
+  cacheLife("days");
   return (data ?? []).map((c) => ({
     id: c.id,
     name: c.name,
@@ -378,7 +393,6 @@ export async function getCategoryArticles(slug: string): Promise<{
 } | null> {
   "use cache";
   cacheTag(TAGS.categories, TAGS.articles);
-  cacheLife("days");
   const category = (await getCategoriesWithCounts()).find((c) => c.slug === slug);
   if (!category) return null;
   const { data, error } = await createSupabasePublicClient()
@@ -387,7 +401,8 @@ export async function getCategoryArticles(slug: string): Promise<{
     .eq("category_id", category.id)
     .order("published_at", { ascending: false })
     .order("sort_order");
-  if (error) fail("category articles", error);
+  if (error) return degrade("category articles", error, null);
+  cacheLife("days");
   return { category, articles: await toSummaries((data ?? []) as ArticleRow[]) };
 }
 
@@ -395,9 +410,9 @@ export async function getCategoryArticles(slug: string): Promise<{
 export async function getArticleCountsByIssue(): Promise<Record<string, number>> {
   "use cache";
   cacheTag(TAGS.articles);
-  cacheLife("days");
   const { data, error } = await createSupabasePublicClient().from("articles").select("issue_id");
-  if (error) fail("article counts", error);
+  if (error) return degrade("article counts", error, {});
+  cacheLife("days");
   const counts: Record<string, number> = {};
   for (const row of data ?? []) counts[row.issue_id] = (counts[row.issue_id] ?? 0) + 1;
   return counts;
@@ -407,13 +422,13 @@ export async function getArticleCountsByIssue(): Promise<Record<string, number>>
 export async function getArticlesByIds(ids: string[]): Promise<ArticleSummary[]> {
   "use cache";
   cacheTag(TAGS.articles);
-  cacheLife("hours");
   if (ids.length === 0) return [];
   const { data, error } = await createSupabasePublicClient()
     .from("articles")
     .select(ARTICLE_COLUMNS)
     .in("id", ids);
-  if (error) fail("articles", error);
+  if (error) return degrade("articles", error, []);
+  cacheLife("hours");
   const summaries = await toSummaries((data ?? []) as ArticleRow[]);
   const byId = new Map(summaries.map((s) => [s.id, s]));
   return ids.map((id) => byId.get(id)).filter((s): s is ArticleSummary => Boolean(s));

@@ -103,10 +103,21 @@ demote or deactivate the last active Super Admin.
 ## Deploying to Vercel
 
 1. Import the GitHub repository in Vercel (framework: Next.js; defaults are correct).
-2. Add the environment variables above.
-3. Choose a Function Region close to the Supabase region (Project → Settings → Functions).
-4. Every pull request gets a preview deployment; merging to `main` deploys production. Roll back
-   instantly from **Deployments → ⋯ → Promote to Production** on an earlier deployment.
+2. Connect Supabase through the **Supabase for Vercel** integration, or add the variables from
+   `.env.example` by hand. The app accepts the integration's names (`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`,
+   `SUPABASE_SECRET_KEY`, `SUPABASE_JWT_SECRET`) as well as the ones in `.env.example`.
+3. Also add `METRICS_SALT` and `CRON_SECRET` (`openssl rand -hex 24`), `NEXT_PUBLIC_SITE_URL`, and the email
+   settings once your sending domain is ready.
+4. Choose a Function Region close to the Supabase region (Project → Settings → Functions).
+5. **Set up the database before the site has content** (see "Supabase setup" above: `supabase db push`, then
+   run `supabase/seed.sql` once in the SQL editor). Until then the site deploys and shows empty pages; they
+   fill in within a few minutes of the schema appearing, or straight away on the next deploy.
+6. Every pull request gets a preview deployment; merging to the production branch deploys production. Roll
+   back instantly from **Deployments → ⋯ → Promote to Production** on an earlier deployment.
+
+If the Supabase GitHub integration is connected, set its **production branch** to the same branch Vercel
+deploys to production, with the Supabase directory `supabase`. Supabase then applies new migrations on every
+push to that branch (it does not run `seed.sql` on production; do that once by hand).
 
 ## Pointing awlel.unn.edu.ng at Vercel
 
