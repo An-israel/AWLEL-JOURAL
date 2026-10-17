@@ -25,8 +25,17 @@ const OPTIONS: sanitizeHtml.IOptions = {
     "h3",
     "h4",
     "hr",
+    // Photos on long-form pages such as The Department. The CSP only lets
+    // images load from this site and Supabase Storage.
+    "figure",
+    "figcaption",
+    "img",
   ],
-  allowedAttributes: { a: ["href", "title", "rel", "target"] },
+  allowedAttributes: {
+    a: ["href", "title", "rel", "target"],
+    img: ["src", "alt", "width", "height", "loading"],
+  },
+  allowedSchemesByTag: { img: ["https", "http"] },
   allowedSchemes: ["http", "https", "mailto"],
   transformTags: {
     a: (tagName, attribs) => ({

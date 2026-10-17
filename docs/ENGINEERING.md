@@ -29,8 +29,8 @@ through a Postgres job queue drained by cron. There are no other services.
 | 9   | Service discovery | NOT NEEDED | —                                                             | ✅    | One app, one database, fixed URLs in env vars. Needed only with several internal services. |
 | 10  | Circuit breakers  | BUILD      | `lib/server/circuit-breaker.ts`                                | ⏳ M8 | Around Resend and any third-party API; open circuit queues the work instead of failing the request. |
 | 11  | Timeouts          | BUILD      | `lib/server/timeout.ts`, all Supabase clients                  | 🟡 M1 | Every Supabase client uses an 8s fetch timeout; health checks 3s. Email and other outbound calls get timeouts as they are added. |
-| 12  | Retries           | BUILD      | job queue                                                     | ⏳ M8 | Emails, webhooks and jobs retried by the queue, never inline in a request. |
-| 13  | Exponential backoff | BUILD    | job queue                                                     | ⏳ M8 | `min(30s × 2^attempt, 1h)` with full jitter. |
+| 12  | Retries           | BUILD      | `lib/server/jobs.ts`                                          | 🟡 M3 | Work is queued, attempted once inline, and left queued with a backoff if it fails; non-retryable provider errors (4xx) dead-letter at once. The cron worker that drains retries arrives in M8. |
+| 13  | Exponential backoff | BUILD    | `lib/backoff.ts` (unit tested)                                | ✅ M3 | `random(0, min(30s × 2^attempt, 1h))` (full jitter). |
 | 14  | Idempotency       | BUILD      | `submissions.idempotency_key`, `jobs.idempotency_key`, `metrics_events` unique key | 🟡 M1 | Schema enforces it now: duplicate submissions, jobs and view/download events are rejected by unique constraints. Upload idempotency in M6. |
 
 ## Asynchronous work and events

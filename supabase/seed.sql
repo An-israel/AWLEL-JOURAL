@@ -105,19 +105,7 @@ $html$<p><em>African, World Literature and English Language</em> (AWLEL) is a fo
 <h2>Aims</h2>
 <p>AWLEL publishes rigorous, original scholarship that advances the study of literature and language in Africa and in the wider world. It brings research on African writing, orature and languages into conversation with work on world literatures and on English as a global language.</p>
 <h2>Scope</h2>
-<p>The journal welcomes work in the following subject areas:</p>
-<ul>
-<li>African literature, written and oral</li>
-<li>World and comparative literature</li>
-<li>English language studies, including stylistics and varieties of English</li>
-<li>Linguistics, including African languages</li>
-<li>Drama and theatre studies</li>
-<li>Poetry and poetics</li>
-<li>Literary theory and criticism</li>
-<li>Oral literature and folklore</li>
-<li>Translation studies</li>
-<li>Cultural studies</li>
-</ul>
+<p>The journal welcomes theoretically informed and methodologically sound work across literary and language studies. Articles may address a single text, author, language or tradition, or work comparatively across them. The subject areas listed on this page link to everything AWLEL has published in each.</p>
 <h2>Types of submission</h2>
 <p>AWLEL accepts original research articles. <mark>[To be confirmed: whether the journal also accepts review essays, book reviews or interviews.]</mark></p>$html$),
 

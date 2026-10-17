@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The project follows
 
 ## [Unreleased]
 
+### Added — Milestone 3: Static pages
+
+- Scope (with live links to every subject area), Submission Guidelines (house structure, citation rules,
+  marked placeholders, closing submit call to action), About the Journal, Privacy. All content comes from
+  the editable `pages` table, is sanitised on render and gets an automatic "On this page" list.
+- Editorial Board directory grouped by role, with photos or monogram portraits.
+- The Department: long-form page, milestones timeline, link to the university; placeholders clearly marked.
+- Contact Us: form saved to `contact_messages`, emailed to the editorial office through the job queue
+  (Resend; logged locally without a key); honeypot, minimum fill time and per-IP rate limiting.
+- Email sender with timeout and idempotency key, job enqueue/claim with exponential backoff and
+  jitter, dead-lettering after the last attempt.
+
 ### Added — Milestone 2: Public site
 
 - Home page: hero with the latest issue cover, latest issue contents, browse by category with article

@@ -11,3 +11,5 @@ export const TAGS = {
   articles: "articles",
   article: (id: string) => `article:${id}`,
 } as const;
+
+export const TAG_DEPARTMENT_TIMELINE = "department-timeline";
