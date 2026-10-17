@@ -173,7 +173,7 @@ to the journal's Google Drive. There are no other services.
 | 94  | Tail latency       | DOC    | below | 🟡 M9 | As above, with the main tail causes and what limits them. |
 | 95  | Network partitions | BUILD  | `lib/data/catalog.ts`, `app/**/error.tsx` | ✅ M9 | If Supabase is unreachable, cached public pages keep serving; uncached ones show a friendly error page with a reference; the admin shows “the dashboard can't load this right now… anything you saved is safe”; downloads answer 503 with `Retry-After`; email waits in the queue. |
 | 96  | Clock skew         | BUILD  | migrations | ✅ M1 | All timestamps default to `now()` in Postgres; triggers set `updated_at`. |
-| 97  | DNS                | DOC    | `docs/DNS_FOR_UNN_ICT.md`, README | ✅ M9 | A one-page sheet for UNN ICT: the CNAME for `awlel.unn.edu.ng`, CAA if used, and the SPF/DKIM/DMARC records for sending from `awlel.unn.edu.ng` (or the journal's own domain at its registrar). |
+| 97  | DNS                | DOC    | `docs/DOMAIN_SETUP.md`, README | ✅ M9 | Step-by-step guide for the journal's own domain: the A/CNAME records Vercel shows (or Vercel nameservers), and the SPF, DKIM (Resend) and DMARC records so site email isn't marked as spam. Notes the same records for `awlel.unn.edu.ng` if UNN ICT hosts it later. |
 | 98  | TCP vs UDP         | NOT NEEDED | — | ✅ | Platform level; HTTP/3 (QUIC over UDP) is negotiated by Vercel automatically. |
 | 99  | HTTP/2 and HTTP/3  | PLATFORM | Vercel | ✅ | |
 | 100 | gRPC               | NOT NEEDED | — | ✅ | No internal services. |

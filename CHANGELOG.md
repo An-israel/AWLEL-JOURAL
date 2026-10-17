@@ -38,7 +38,10 @@ All notable changes to this project are documented here. The project follows
 
 #### Docs and tooling
 
-- `docs/DNS_FOR_UNN_ICT.md`: the records UNN ICT needs to create, for the website and for email.
+- `docs/LAUNCH_GUIDE.md`: getting the site live with no command line: one SQL file for the whole database
+  (`supabase/setup/production-setup.sql`), the Vercel environment variables and where each comes from, and
+  making yourself Super Admin with one query (`supabase/setup/make-super-admin.sql`).
+- `docs/DOMAIN_SETUP.md`: connecting the journal's own domain to Vercel, and its email records for Resend.
 - README: domain, email DNS and migration-branch notes. `docs/ENGINEERING.md`: Lighthouse, accessibility,
   security review and test results; query plans; every item's final state.
 - `scripts/measure.sh`: Lighthouse and latency for any deployment.

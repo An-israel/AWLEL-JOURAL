@@ -18,7 +18,7 @@ issue launches.
 | ---- | --- | --------------- |
 | First responder | Super Admin (`ALERT_EMAIL`) | Every alert |
 | Technical escalation | The department's web contact or developer (fill in) | Anything in this runbook you can't resolve in an hour |
-| DNS and the `unn.edu.ng` domain | UNN ICT unit (fill in) | Certificate or domain problems |
+| Domain registrar | The company the domain was bought from (fill in) | Certificate or domain problems |
 | Platforms | Vercel support, Supabase support (dashboard → Support) | Platform outages lasting over an hour |
 
 Status pages: [vercel-status.com](https://www.vercel-status.com), [status.supabase.com](https://status.supabase.com),
@@ -125,7 +125,7 @@ failing, nearly always because the DNS record no longer points at Vercel.
 
 1. Vercel → Project → Settings → Domains: the domain should show a valid configuration. If it shows an error,
    it names the DNS record it expects.
-2. Ask UNN ICT to restore that record exactly as listed in the README (“Pointing awlel.unn.edu.ng at Vercel”).
+2. At the domain registrar, restore the records exactly as `docs/DOMAIN_SETUP.md` and Vercel list them.
    Once DNS is right, Vercel issues the certificate within minutes.
 
 ## Backups failing

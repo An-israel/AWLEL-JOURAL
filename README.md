@@ -58,6 +58,11 @@ sample issue (Volume 26) from the admin before launch.
 
 ## Supabase setup (production)
 
+**Quickest way, no command line:** follow [`docs/LAUNCH_GUIDE.md`](docs/LAUNCH_GUIDE.md). It sets up the
+whole database by pasting one file, `supabase/setup/production-setup.sql`, into the Supabase SQL Editor
+(regenerate it with `scripts/build-setup-sql.sh` after adding a migration). The steps below are the
+command-line alternative.
+
 1. In the Supabase dashboard, note the **project ref**, **API URL**, **anon key**, **service role key**
    and **database password**.
 2. Apply the schema from your machine:
@@ -128,24 +133,13 @@ If the Supabase GitHub integration is connected, set its **production branch** t
 deploys to production, with the Supabase directory `supabase`. Supabase then applies new migrations on every
 push to that branch (it does not run `seed.sql` on production; do that once by hand).
 
-## Pointing awlel.unn.edu.ng at Vercel
+## Connecting your domain
 
-1. In Vercel, **Project → Settings → Domains → Add** `awlel.unn.edu.ng`. Vercel shows the record it expects.
-2. Send UNN ICT [`docs/DNS_FOR_UNN_ICT.md`](docs/DNS_FOR_UNN_ICT.md), with the value from step 1 filled in.
-   In short:
-
-   | Type  | Name                    | Value                                                |
-   | ----- | ----------------------- | ---------------------------------------------------- |
-   | CNAME | `awlel` (in unn.edu.ng) | `cname.vercel-dns.com.` (use the value Vercel shows) |
-
-3. Once the record resolves, Vercel issues and renews the HTTPS certificate by itself. Then set
-   `NEXT_PUBLIC_SITE_URL=https://awlel.unn.edu.ng`, update Supabase → Auth → URL configuration (above) and
-   the `SITE_URL` GitHub secret, and redeploy.
-
-**Email.** For emails from the site to reach inboxes, the sending domain needs SPF, DKIM and DMARC records.
-Add the domain in Resend (Domains → Add) and create the records it lists: at your registrar if the journal
-bought its own domain, or through UNN ICT if sending from `awlel.unn.edu.ng` (section 2 of the DNS sheet).
-Then set `EMAIL_FROM` (for example `AWLEL Journal <no-reply@your-domain>`) and `RESEND_API_KEY` in Vercel.
+Step by step, for a domain bought from any registrar (website records and the email records for Resend):
+[`docs/DOMAIN_SETUP.md`](docs/DOMAIN_SETUP.md). In short: add the domain in Vercel → **Settings → Domains**,
+create the A and CNAME records Vercel shows at your registrar, then set `NEXT_PUBLIC_SITE_URL`, update
+Supabase → Auth → URL configuration, and redeploy. For email, add the domain in Resend and create its SPF,
+DKIM and DMARC records, then set `RESEND_API_KEY` and `EMAIL_FROM`.
 
 ## Editor's guide: publishing an issue
 

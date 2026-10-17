@@ -32,6 +32,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run format:check
+      # The one-paste setup file (docs/LAUNCH_GUIDE.md) must match the migrations and seed.
+      - run: scripts/build-setup-sql.sh && git diff --exit-code supabase/setup
       - run: npm run typecheck
       - run: npm test
       # Fail on high/critical advisories in production dependencies (item 108).
