@@ -390,7 +390,7 @@ set search_path = ''
 as $$
   select
     setweight(to_tsvector('english', extensions.unaccent(coalesce(a.title, ''))), 'A')
-    || setweight(to_tsvector('simple', extensions.unaccent(coalesce(
+    || setweight(to_tsvector('english', extensions.unaccent(coalesce(
          (select string_agg(aa.full_name, ' ') from public.article_authors aa where aa.article_id = a.id), ''))), 'B')
     || setweight(to_tsvector('english', extensions.unaccent(array_to_string(a.keywords, ' '))), 'B')
     || setweight(to_tsvector('english', extensions.unaccent(

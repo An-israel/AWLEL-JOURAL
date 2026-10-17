@@ -253,3 +253,12 @@ from (values
   ('00000000-0000-4000-8000-000000260103', 'Kelechi U. Nnamdi', 'Department of English, Nnamdi Azikiwe University, Awka', 2)
 ) as v (article_id, full_name, affiliation, position)
 where not exists (select 1 from public.article_authors a where a.article_id = v.article_id::uuid);
+
+-- Fictional sample reading figures so "Most read" has an order to display.
+update public.articles a set view_count = v.views
+from (values
+  ('00000000-0000-4000-8000-000000260101'::uuid, 412),
+  ('00000000-0000-4000-8000-000000260102'::uuid, 268),
+  ('00000000-0000-4000-8000-000000260103'::uuid, 157)
+) as v (id, views)
+where a.id = v.id and a.view_count = 0;

@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The project follows
 
 ## [Unreleased]
 
+### Added — Milestone 2: Public site
+
+- Home page: hero with the latest issue cover, latest issue contents, browse by category with article
+  counts, most read / most downloaded, About summary, recent covers and an authors' call to action.
+- Journal Archive grouped by year with a year filter and jump-to-year links.
+- Issue pages (`/issues/[volume]/[issue]`): cover, label, editorial, full-issue downloads, table of
+  contents with category tags, page ranges and abstract toggles, previous/next issue.
+- Article pages (`/articles/[slug]`): authors with affiliations and ORCID, keywords, DOI, abstract,
+  downloads with counts, collapsible PDF preview, "Cite this article" (APA 7th, MLA 8th, BibTeX with
+  rich-text copy, downloadable .ris), share links, more from this issue / category. Renamed slugs
+  redirect permanently.
+- Category pages with newest / most-read sorting.
+- Search (`/search`) over titles, abstracts, keywords and author names with highlighted matches,
+  filters for year, issue, category and author, and pagination (Postgres full-text search).
+- Typographic house-style cover used whenever an issue has no uploaded cover image.
+- Citation formatter and issue labelling with unit tests; end-to-end tests for archive → issue →
+  article, citations, categories, search and 404s.
+
 ### Added — Milestone 1: Foundation
 
 - Next.js 16 project (App Router, Cache Components, strict TypeScript), Tailwind CSS 4 with the AWLEL

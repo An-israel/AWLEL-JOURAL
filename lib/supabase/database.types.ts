@@ -10,12 +10,7 @@ export type Database = {
     };
     Functions: {
       graphql: {
-        Args: {
-          extensions?: Json;
-          operationName?: string;
-          query?: string;
-          variables?: Json;
-        };
+        Args: { extensions?: Json; operationName?: string; query?: string; variables?: Json };
         Returns: Json;
       };
     };
@@ -83,6 +78,7 @@ export type Database = {
           deleted_at: string | null;
           docx_file_id: string | null;
           doi: string | null;
+          download_count: number | null;
           download_docx_count: number;
           download_pdf_count: number;
           first_page: number | null;
@@ -113,6 +109,7 @@ export type Database = {
           deleted_at?: string | null;
           docx_file_id?: string | null;
           doi?: string | null;
+          download_count?: never;
           download_docx_count?: number;
           download_pdf_count?: number;
           first_page?: number | null;
@@ -142,6 +139,7 @@ export type Database = {
           deleted_at?: string | null;
           docx_file_id?: string | null;
           doi?: string | null;
+          download_count?: never;
           download_docx_count?: number;
           download_pdf_count?: number;
           first_page?: number | null;
@@ -1435,9 +1433,17 @@ export type Database = {
       };
     };
     Functions: {
-      article_search_document: {
-        Args: { p_article_id: string };
-        Returns: unknown;
+      article_search_document: { Args: { p_article_id: string }; Returns: unknown };
+      categories_with_counts: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          article_count: number;
+          description: string;
+          id: string;
+          name: string;
+          slug: string;
+          sort_order: number;
+        }[];
       };
       check_rate_limit: {
         Args: { p_key: string; p_limit: number; p_window_seconds: number };
@@ -1452,25 +1458,34 @@ export type Database = {
         Returns: Database["public"]["Enums"]["user_role"];
       };
       feature_enabled: { Args: { p_key: string }; Returns: boolean };
-      is_assigned_reviewer: {
-        Args: { p_submission_id: string };
-        Returns: boolean;
-      };
-      is_published_article: {
-        Args: { p_article_id: string };
-        Returns: boolean;
-      };
+      is_assigned_reviewer: { Args: { p_submission_id: string }; Returns: boolean };
+      is_published_article: { Args: { p_article_id: string }; Returns: boolean };
       is_staff: { Args: Record<PropertyKey, never>; Returns: boolean };
-      is_submission_author: {
-        Args: { p_submission_id: string };
-        Returns: boolean;
-      };
+      is_submission_author: { Args: { p_submission_id: string }; Returns: boolean };
       is_super_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
-      row_changed: {
-        Args: { ignored: string[]; new_row: Json; old_row: Json };
-        Returns: boolean;
-      };
+      row_changed: { Args: { ignored: string[]; new_row: Json; old_row: Json }; Returns: boolean };
       schema_version: { Args: Record<PropertyKey, never>; Returns: string };
+      search_articles: {
+        Args: {
+          p_author?: string;
+          p_category_slug?: string;
+          p_issue_id?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_query: string;
+          p_volume?: number;
+          p_year?: number;
+        };
+        Returns: {
+          abstract_highlight: string;
+          id: string;
+          rank: number;
+          slug: string;
+          title: string;
+          title_highlight: string;
+          total_count: number;
+        }[];
+      };
       submission_id_from_path: { Args: { p_name: string }; Returns: string };
     };
     Enums: {
@@ -1518,9 +1533,7 @@ export type Tables<
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never) = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
-}
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R;
@@ -1543,9 +1556,7 @@ export type TablesInsert<
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never) = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
-}
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I;
     }
@@ -1567,9 +1578,7 @@ export type TablesUpdate<
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never) = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
-}
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U;
     }
@@ -1591,9 +1600,7 @@ export type Enums<
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never) = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
-}
+> = DefaultSchemaEnumNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
@@ -1607,9 +1614,7 @@ export type CompositeTypes<
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never) = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals;
-}
+> = PublicCompositeTypeNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]

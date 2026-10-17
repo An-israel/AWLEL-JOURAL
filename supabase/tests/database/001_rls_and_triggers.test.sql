@@ -100,7 +100,7 @@ select pg_temp.reset();
 -- Integrity triggers ----------------------------------------------------------
 select ok((select search_vector @@ to_tsquery('english', 'migration') from public.articles
            where id = '00000000-0000-4000-8000-000000260101'), 'search vector indexes title/abstract');
-select ok((select search_vector @@ to_tsquery('simple', 'okeke') from public.articles
+select ok((select search_vector @@ to_tsquery('english', 'okeke') from public.articles
            where id = '00000000-0000-4000-8000-000000260101'), 'search vector indexes author names');
 
 update public.articles set slug = 'renamed-slug' where id = '99999999-9999-4999-8999-999999999999';

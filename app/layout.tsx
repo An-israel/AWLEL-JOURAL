@@ -47,8 +47,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className={`${poppins.variable} ${sourceSerif.variable} antialiased`}>
       <body className="flex min-h-dvh flex-col">
         {children}
-        <Analytics />
-        <SpeedInsights />
+        {/* These scripts are served by Vercel only; skip them when self-hosted. */}
+        {process.env.VERCEL ? (
+          <>
+            <Analytics />
+            <SpeedInsights />
+          </>
+        ) : null}
       </body>
     </html>
   );

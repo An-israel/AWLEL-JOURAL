@@ -169,6 +169,17 @@
     background: linear-gradient(90deg, var(--gold-dark), var(--gold) 40%, var(--gold-light));
   }
 
+  /* Bands for the foot of an issue cover, which sits on a navy field. */
+  .cover-bands {
+    background: linear-gradient(
+      115deg,
+      transparent 0 34%,
+      var(--ink) 34% 58%,
+      var(--gold) 58% 63%,
+      var(--royal) 63% 100%
+    );
+  }
+
   /* Diagonal cover bands (blue / black / gold), used sparingly as an accent. */
   .accent-bands {
     background: linear-gradient(
