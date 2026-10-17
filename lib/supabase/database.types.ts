@@ -1433,6 +1433,10 @@ export type Database = {
       };
     };
     Functions: {
+      add_submission_note: {
+        Args: { p_message: string; p_submission_id: string; p_visible_to_author: boolean };
+        Returns: undefined;
+      };
       article_search_document: { Args: { p_article_id: string }; Returns: unknown };
       categories_with_counts: {
         Args: Record<PropertyKey, never>;
@@ -1444,6 +1448,16 @@ export type Database = {
           slug: string;
           sort_order: number;
         }[];
+      };
+      change_submission_status: {
+        Args: {
+          p_expected_version: number;
+          p_message?: string;
+          p_status: Database["public"]["Enums"]["submission_status"];
+          p_submission_id: string;
+          p_visible_to_author?: boolean;
+        };
+        Returns: number;
       };
       check_rate_limit: {
         Args: { p_key: string; p_limit: number; p_window_seconds: number };
@@ -1464,6 +1478,25 @@ export type Database = {
       is_submission_author: { Args: { p_submission_id: string }; Returns: boolean };
       is_super_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
       reorder_rows: { Args: { p_ids: string[]; p_table: string }; Returns: undefined };
+      reviewer_queue: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          abstract: string;
+          assigned_at: string;
+          assignment_id: string;
+          assignment_status: Database["public"]["Enums"]["review_status"];
+          assignment_version: number;
+          category_name: string;
+          citation_style: Database["public"]["Enums"]["citation_style"];
+          comments: string;
+          due_date: string;
+          keywords: string[];
+          recommendation: Database["public"]["Enums"]["review_recommendation"];
+          submission_id: string;
+          submitted_at: string;
+          title: string;
+        }[];
+      };
       row_changed: { Args: { ignored: string[]; new_row: Json; old_row: Json }; Returns: boolean };
       save_article: {
         Args: { p_authors: Json; p_data: Json; p_expected_version: number; p_id: string };

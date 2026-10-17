@@ -10,7 +10,15 @@ export function isActive(pathname: string, href: string) {
 
 /** Desktop navigation bar (≥1280px). Below that, the slide-out menu is used. */
 export function MainNav() {
-  const pathname = usePathname();
+  return <MainNavLinks pathname={usePathname()} />;
+}
+
+/**
+ * The links themselves. Rendered with an empty pathname as the Suspense
+ * fallback, so routes whose URL isn't known when prerendering still get a
+ * complete navigation bar in their static shell.
+ */
+export function MainNavLinks({ pathname }: { pathname: string }) {
   return (
     <nav aria-label="Main" className="hidden bg-navy xl:block">
       <ul className="mx-auto flex max-w-site items-stretch justify-between px-8">

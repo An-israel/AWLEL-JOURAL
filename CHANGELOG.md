@@ -6,6 +6,32 @@ All notable changes to this project are documented here. The project follows
 
 ## [Unreleased]
 
+### Added — Milestone 6: Submissions and peer review
+
+- Submit a manuscript (signed-in authors): title, abstract, keywords, subject area, citation style,
+  co-authors, cover letter, .docx manuscript (plus optional PDF), and the three declarations. Validated on
+  both sides, rate limited per account, and safe to double-click or retry (idempotency key). Files go
+  straight to private storage via signed URLs.
+- My submissions: each manuscript's status with a plain-language explanation, a timeline of messages from
+  the editors, files, and revised-manuscript upload when revisions are requested.
+- Admin Submissions: filterable list; detail page with authors, files, reviews received and full history;
+  change status with an optional message to the author (one transaction, version-checked); internal notes;
+  assign reviewers with a due date, withdraw them; create a draft article (with authors) from an accepted
+  manuscript.
+- Reviews: reviewers get a queue and a blinded manuscript page (no author names, emails, institutions or
+  cover letter, enforced in the database) with a neutral download name; recommendation, rich-text
+  comments, optional annotated file, save draft, submit.
+- Emails (queued, retried, idempotent): submission received (author and editors), status changed,
+  reviewer invited, review submitted, revision uploaded.
+- Database: `change_submission_status`, `add_submission_note`, `reviewer_queue` (migration 8, with
+  rollback) and pgTAP tests for the workflow.
+- End-to-end test of one manuscript through submit, screening, review, decision and article creation.
+
+### Fixed
+
+- Vercel builds no longer fail before the database schema has been applied, and accept the environment
+  variable names the Supabase–Vercel integration sets.
+
 ### Added — Milestone 5: Admin content management
 
 - Volumes and Issues: grouped by year; create volumes (number and year entered separately) and issues;

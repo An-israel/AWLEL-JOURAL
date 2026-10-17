@@ -3,7 +3,8 @@ import Link from "next/link";
 import { getSiteSettings } from "@/lib/data/site-settings";
 import { AccountLink } from "./account-link";
 import { LogoMark } from "./logo";
-import { MainNav } from "./main-nav";
+import { Suspense } from "react";
+import { MainNav, MainNavLinks } from "./main-nav";
 import { MobileNav } from "./mobile-nav";
 import { SearchDialog } from "./search-dialog";
 
@@ -55,11 +56,15 @@ export async function SiteHeader() {
             >
               Submit a Manuscript
             </Link>
-            <MobileNav />
+            <Suspense fallback={<span className="size-11 xl:hidden" aria-hidden />}>
+              <MobileNav />
+            </Suspense>
           </div>
         </div>
       </div>
-      <MainNav />
+      <Suspense fallback={<MainNavLinks pathname="" />}>
+        <MainNav />
+      </Suspense>
     </header>
   );
 }

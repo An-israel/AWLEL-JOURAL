@@ -29,25 +29,7 @@ export async function uploadToSlot(
   if (!ticket.ok || !ticket.data) return ticket.ok ? { ok: false, message: "Upload failed." } : ticket;
   const { bucket, path, token } = ticket.data;
 
-  const url = `${publicEnv.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/upload/sign/${bucket}/${path
-    .split("/")
-    .map(encodeURIComponent)
-    .join("/")}?token=${encodeURIComponent(token)}`;
-
-  const uploaded = await new Promise<boolean>((resolve) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url);
-    xhr.setRequestHeader("content-type", file.type);
-    xhr.setRequestHeader("cache-control", "max-age=3600");
-    xhr.setRequestHeader("x-upsert", "false");
-    xhr.setRequestHeader("apikey", publicEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
-    xhr.onload = () => resolve(xhr.status >= 200 && xhr.status < 300);
-    xhr.onerror = () => resolve(false);
-    xhr.ontimeout = () => resolve(false);
-    xhr.timeout = 15 * 60 * 1000;
-    xhr.send(file);
-  });
+  const uploaded = await putToSignedUrl(bucket, path, token, file, onProgress);
   if (!uploaded)
     return { ok: false, message: `${file.name} could not be uploaded. Check your connection and try again.` };
   onProgress?.(1);
@@ -60,5 +42,33 @@ export async function uploadToSlot(
     mimeType: file.type,
     size: file.size,
     expectedVersion,
+  });
+}
+
+/** PUTs a file to a Supabase signed upload URL, reporting progress (0–1). */
+export function putToSignedUrl(
+  bucket: string,
+  path: string,
+  token: string,
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<boolean> {
+  const url = `${publicEnv.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/upload/sign/${bucket}/${path
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/")}?token=${encodeURIComponent(token)}`;
+  return new Promise<boolean>((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("content-type", file.type);
+    xhr.setRequestHeader("cache-control", "max-age=3600");
+    xhr.setRequestHeader("x-upsert", "false");
+    xhr.setRequestHeader("apikey", publicEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
+    xhr.onload = () => resolve(xhr.status >= 200 && xhr.status < 300);
+    xhr.onerror = () => resolve(false);
+    xhr.ontimeout = () => resolve(false);
+    xhr.timeout = 15 * 60 * 1000;
+    xhr.send(file);
   });
 }

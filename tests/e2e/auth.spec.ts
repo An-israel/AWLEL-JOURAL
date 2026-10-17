@@ -47,7 +47,7 @@ test("reviewers land on their review queue and see only their sections", async (
   await signIn(page, reviewer.email, TEST_PASSWORD);
   await expect(page).toHaveURL(/\/admin\/reviews$/);
   const nav = page.getByRole("navigation", { name: "Admin" });
-  await expect(nav.getByRole("link")).toHaveText(["My profile"]);
+  await expect(nav.getByRole("link")).toHaveText(["Reviews", "My profile"]);
   await page.goto("/admin/users");
   await expect(page).toHaveURL(/\/no-access$/);
 });

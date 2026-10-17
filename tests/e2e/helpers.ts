@@ -57,3 +57,9 @@ export async function signIn(page: Page, email: string, password: string) {
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
 }
+
+/** Signs in and waits until the app has moved past the login page. */
+export async function signInAndWait(page: Page, email: string, password: string) {
+  await signIn(page, email, password);
+  await page.waitForURL((url) => !url.pathname.startsWith("/login"));
+}

@@ -18,7 +18,7 @@ through a Postgres job queue drained by cron. There are no other services.
 
 | #   | Item              | Status     | Where                                                         | State | Notes |
 | --- | ----------------- | ---------- | ------------------------------------------------------------- | ----- | ----- |
-| 1   | Rate limiting     | BUILD      | `lib/server/rate-limit.ts`, `check_rate_limit()` in migration 3 | 🟡 M1 | Postgres fixed-window limiter (no extra vendor). Returns 429 + `Retry-After` via `apiRoute`. Applied so far to login, sign-up and password reset (per IP and per account) and the contact form; submission (M6) and download (M7) follow. Keys are HMAC-hashed; never raw IPs. Fails open if the DB is down. |
+| 1   | Rate limiting     | BUILD      | `lib/server/rate-limit.ts`, `check_rate_limit()` in migration 3 | 🟡 M1 | Postgres fixed-window limiter (no extra vendor). Returns 429 + `Retry-After` via `apiRoute`. Applied so far to login, sign-up and password reset (per IP and per account) and the contact form, and manuscript submission (per account); download (M7) follows. Keys are HMAC-hashed; never raw IPs. Fails open if the DB is down. |
 | 2   | Caching           | BUILD      | `next.config.ts` (`cacheComponents`), `lib/data/*`             | 🟡 M1 | Public pages are static shells with `"use cache"` data tagged by entity (`lib/data/tags.ts`). Next 16 replaces `unstable_cache` with `"use cache"` + `cacheTag`; same behaviour. API `Cache-Control` set per route. |
 | 3   | Load balancing    | PLATFORM   | Vercel                                                        | ✅    | Vercel routes each request to healthy function instances. |
 | 4   | Reverse proxies   | PLATFORM   | Vercel edge network                                           | ✅    | TLS termination, compression, HTTP/2+3 and routing happen at Vercel's edge before our code runs. |
@@ -31,7 +31,7 @@ through a Postgres job queue drained by cron. There are no other services.
 | 11  | Timeouts          | BUILD      | `lib/server/timeout.ts`, all Supabase clients                  | 🟡 M1 | Every Supabase client uses an 8s fetch timeout; health checks 3s. Email and other outbound calls get timeouts as they are added. |
 | 12  | Retries           | BUILD      | `lib/server/jobs.ts`                                          | 🟡 M3 | Work is queued, attempted once inline, and left queued with a backoff if it fails; non-retryable provider errors (4xx) dead-letter at once. The cron worker that drains retries arrives in M8. |
 | 13  | Exponential backoff | BUILD    | `lib/backoff.ts` (unit tested)                                | ✅ M3 | `random(0, min(30s × 2^attempt, 1h))` (full jitter). |
-| 14  | Idempotency       | BUILD      | `submissions.idempotency_key`, `jobs.idempotency_key`, `metrics_events` unique key | 🟡 M1 | Schema enforces it now: duplicate submissions, jobs and view/download events are rejected by unique constraints. Upload idempotency in M6. |
+| 14  | Idempotency       | BUILD      | `submissions.idempotency_key`, `jobs.idempotency_key`, `metrics_events` unique key | 🟡 M1 | Schema enforces it now: duplicate submissions, jobs and view/download events are rejected by unique constraints. M6: the submit form carries one idempotency key per attempt, so a double click or retry returns the same submission; files attach by path, so a retried attach is a no-op; every email has its own idempotency key. |
 
 ## Asynchronous work and events
 
@@ -172,7 +172,7 @@ through a Postgres job queue drained by cron. There are no other services.
 | 98  | TCP vs UDP         | NOT NEEDED | — | ✅ | Platform level; HTTP/3 (QUIC over UDP) is negotiated by Vercel automatically. |
 | 99  | HTTP/2 and HTTP/3  | PLATFORM | Vercel | ✅ | |
 | 100 | gRPC               | NOT NEEDED | — | ✅ | No internal services. |
-| 101 | Webhooks           | BUILD  | — | ⏳ M6/M8 | Resend bounce/complaint webhooks, signed and idempotent. |
+| 101 | Webhooks           | BUILD  | — | ⏳ M8 | Resend bounce/complaint webhooks, signed and idempotent (moved to M8 with the domain setup). |
 
 ## APIs, infrastructure and operations
 
@@ -204,4 +204,4 @@ through a Postgres job queue drained by cron. There are no other services.
 | `review_assignments` has `pending/submitted/withdrawn` status and a reminder timestamp | Due-date reminders (item 21) and withdrawing a reviewer without deleting history. |
 | `metrics_events.event_day` + unique key; `metrics_daily` | De-duplication per session per day; rollup replaces partitioning (item 31). |
 | Extra operational tables: `domain_events`, `jobs`, `dead_letter_jobs`, `feature_flags`, `rate_limits` | Items 1, 15, 17, 20, 51. |
-| Reviewers have no direct access to `submissions` | Blinding is enforced by the database, not the UI: reviewers will read a blinded projection (M6). |
+| Reviewers have no direct access to `submissions` | Blinding is enforced by the database, not the UI: reviewers read only the blinded `reviewer_queue()` projection, and download manuscripts under a neutral name (M6). |

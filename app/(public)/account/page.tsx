@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { PasswordForm } from "@/components/account/password-form";
 import { ProfileForm } from "@/components/account/profile-form";
+import { MySubmissions } from "@/components/submissions/my-submissions";
 import { Toaster } from "@/components/ui/toaster";
 import { signOut } from "@/app/(public)/(auth)/actions";
 import { requireUser } from "@/lib/auth";
@@ -56,10 +57,10 @@ async function Account() {
             Submit a manuscript
           </Link>
         </div>
-        <p className="mt-3 text-sm text-ink-muted">
-          You haven&rsquo;t submitted any manuscripts yet. Before you start, read the{" "}
-          <Link href="/submission-guidelines">submission guidelines</Link>.
-        </p>
+        <MySubmissions userId={user.id} limit={5} />
+        <Link href="/account/submissions" className="mt-2 inline-block text-sm font-semibold">
+          All my submissions →
+        </Link>
       </section>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
