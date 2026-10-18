@@ -161,7 +161,10 @@ export function formatApa(input: CitationInput): FormattedCitation {
   segments.push({ text: String(input.volume), italic: true });
   if (input.issue) segments.push({ text: `(${input.issue})` });
   segments.push({ text: range ? `, ${range}.` : "." });
-  if (input.doi) segments.push({ text: ` ${doiUrl(input.doi)}` });
+  // APA 7 (9.34): a DOI when there is one; otherwise the article's own page,
+  // because an open-access journal article online has a URL that works for
+  // every reader. Neither is followed by a full stop.
+  segments.push({ text: ` ${input.doi ? doiUrl(input.doi) : input.url}` });
   return finish(segments);
 }
 
@@ -191,7 +194,10 @@ export function formatMla(input: CitationInput): FormattedCitation {
   parts.push(String(input.year));
   if (range) parts.push(`${range.includes(EN_DASH) ? "pp." : "p."} ${range}`);
   segments.push({ text: `, ${parts.join(", ")}.` });
+  // MLA 8 ends an online source with its DOI or, failing that, its URL
+  // without the "https://".
   if (input.doi) segments.push({ text: ` doi:${input.doi.replace(/^https?:\/\/(dx\.)?doi\.org\//i, "")}.` });
+  else segments.push({ text: ` ${input.url.replace(/^https?:\/\//i, "")}.` });
   return finish(segments);
 }
 

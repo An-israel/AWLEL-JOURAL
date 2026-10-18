@@ -48,7 +48,7 @@ describe("names", () => {
 describe("APA 7th", () => {
   it("formats a single author", () => {
     expect(formatApa(base).plain).toBe(
-      `Okeke, N. A. (2025). Memory, Migration and the Postcolonial Archive. ${JOURNAL}, 25(1), 1–18.`,
+      `Okeke, N. A. (2025). Memory, Migration and the Postcolonial Archive. ${JOURNAL}, 25(1), 1–18. https://awlel.unn.edu.ng/articles/memory`,
     );
   });
 
@@ -78,10 +78,16 @@ describe("APA 7th", () => {
     expect(html).toContain(`<i>${JOURNAL}</i>, <i>25</i>(1)`);
   });
 
-  it("appends the DOI as a URL only when present, and omits the issue for single-issue volumes", () => {
+  it("ends with the DOI as a URL when there is one, and omits the issue for single-issue volumes", () => {
     const apa = formatApa({ ...base, issue: null, doi: "10.1234/awlel.2025.1" }).plain;
-    expect(apa).toContain(`${JOURNAL}, 25, 1–18. https://doi.org/10.1234/awlel.2025.1`);
-    expect(formatApa(base).plain).not.toContain("doi.org");
+    expect(apa).toMatch(new RegExp(`${JOURNAL}, 25, 1–18\\. https://doi\\.org/10\\.1234/awlel\\.2025\\.1$`));
+    expect(apa).not.toContain(base.url);
+  });
+
+  it("ends with the article's own URL, without a full stop, when there is no DOI", () => {
+    const apa = formatApa(base).plain;
+    expect(apa).not.toContain("doi.org");
+    expect(apa.endsWith("1–18. https://awlel.unn.edu.ng/articles/memory")).toBe(true);
   });
 
   it("does not double the full stop after a title ending in a question mark", () => {
@@ -94,7 +100,7 @@ describe("APA 7th", () => {
 describe("MLA 8th", () => {
   it("formats a single author", () => {
     expect(formatMla(base).plain).toBe(
-      `Okeke, Ngozi A. “Memory, Migration and the Postcolonial Archive.” ${JOURNAL}, vol. 25, no. 1, 2025, pp. 1–18.`,
+      `Okeke, Ngozi A. “Memory, Migration and the Postcolonial Archive.” ${JOURNAL}, vol. 25, no. 1, 2025, pp. 1–18. awlel.unn.edu.ng/articles/memory.`,
     );
   });
 
@@ -120,6 +126,7 @@ describe("MLA 8th", () => {
   it("uses p. for a single page and adds a DOI", () => {
     const mla = formatMla({ ...base, lastPage: 1, doi: "10.1234/x" }).plain;
     expect(mla).toContain("2025, p. 1. doi:10.1234/x.");
+    expect(mla).not.toContain("awlel.unn.edu.ng");
   });
 });
 
