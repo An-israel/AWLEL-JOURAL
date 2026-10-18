@@ -21,6 +21,8 @@ export interface SettingsData {
   contactEmail: string;
   postalAddress: string;
   publicationFrequency: string;
+  licenseName: string;
+  licenseUrl: string;
   social: { x: string; facebook: string; linkedin: string; website: string };
   logo: AttachedFile | null;
   ogImage: AttachedFile | null;
@@ -107,6 +109,8 @@ export function SettingsForm({
             "Publication frequency",
             "e.g. One volume a year, in one or two issues",
           )}
+          {field("licenseName", "Licence (leave empty until confirmed)", "e.g. CC BY 4.0")}
+          {field("licenseUrl", "Licence link", "https://creativecommons.org/licenses/by/4.0/")}
           <div className="md:col-span-2">
             <Label htmlFor="s-address">Postal address</Label>
             <Textarea
