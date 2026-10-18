@@ -24,7 +24,7 @@ create table if not exists supabase_migrations.schema_migrations (version text p
 do $awlel_check$
 begin
   if to_regclass('public.issues') is not null
-     and not exists (select 1 from supabase_migrations.schema_migrations where version in ('20261017000001','20261017000002','20261017000003','20261017000004','20261017000005','20261017000006','20261017000007','20261017000008','20261017000009','20261017000010','20261017000011','20261017000012','20261018000013')) then
+     and not exists (select 1 from supabase_migrations.schema_migrations where version in ('20261017000001','20261017000002','20261017000003','20261017000004','20261017000005','20261017000006','20261017000007','20261017000008','20261017000009','20261017000010','20261017000011','20261017000012','20261018000013','20261018000014','20261018000015','20261018000016','20261018000017')) then
     raise exception 'This database has AWLEL tables but no record of how they were created, so updating it automatically is not safe. Nothing was changed. Ask the developer for help.';
   end if;
 end
@@ -2706,6 +2706,1336 @@ $awlel_migration$;
 end
 $awlel_wrap$;
 
+-- >>> migration 20261018000014_public_fixes
+do $awlel_wrap$
+begin
+  if not exists (select 1 from supabase_migrations.schema_migrations where version = '20261018000014') then
+    execute $awlel_migration$
+-- =============================================================================
+-- Public site fixes (audit items 21, 28, 33 and 41).
+--   - search_articles: a stable order for paging, table-of-contents order when
+--     filtering by issue, author names matched literally (% and _ are not
+--     wildcards), and readable snippets (entities decoded, cut at a word with
+--     an ellipsis, fragments joined by " … ").
+--   - site_settings: an optional licence (name and link) shown on article
+--     pages and in their metadata when set.
+-- Additive and safe to run twice.
+-- Reversal: supabase/rollbacks/20261018000014_public_fixes.down.sql
+-- =============================================================================
+
+-- 1. Licence (item 41). Both optional; nothing is shown until a name is set.
+alter table public.site_settings
+  add column if not exists license_name text,
+  add column if not exists license_url text;
+alter table public.site_settings drop constraint if exists site_settings_license_name_check;
+alter table public.site_settings
+  add constraint site_settings_license_name_check check (char_length(license_name) between 1 and 120);
+alter table public.site_settings drop constraint if exists site_settings_license_url_check;
+alter table public.site_settings
+  add constraint site_settings_license_url_check
+  check (license_url ~ '^https?://[^\s]+$' and char_length(license_url) <= 500);
+
+-- 2. Rich text to plain text for search snippets: tags become spaces, the
+--    entities the editor produces are decoded, and whitespace is collapsed.
+create or replace function public.html_to_text(p_html text)
+returns text
+language sql
+immutable
+parallel safe
+set search_path = ''
+as $$
+  select trim(regexp_replace(
+    replace(replace(replace(replace(replace(replace(replace(
+      regexp_replace(coalesce(p_html, ''), '<[^>]+>', ' ', 'g'),
+      '&nbsp;', ' '), '&lt;', '<'), '&gt;', '>'), '&quot;', '"'), '&#39;', ''''), '&apos;', ''''),
+      '&amp;', '&'),
+    '\s+', ' ', 'g'))
+$$;
+
+-- 3. Search (items 21, 28 and 33). Same signature and columns as before.
+create or replace function public.search_articles(
+  p_query text,
+  p_year int default null,
+  p_volume int default null,
+  p_issue_id uuid default null,
+  p_category_slug text default null,
+  p_author text default null,
+  p_limit int default 20,
+  p_offset int default 0
+)
+returns table (
+  id uuid,
+  slug text,
+  title text,
+  title_highlight text,
+  abstract_highlight text,
+  rank real,
+  total_count bigint
+)
+language sql
+stable
+set search_path = ''
+as $$
+  with q as (
+    select case when coalesce(trim(p_query), '') = '' then null
+           else websearch_to_tsquery('english', extensions.unaccent(p_query)) end as tsq,
+           -- An author search matches the typed text literally: % and _ are
+           -- escaped so they are not LIKE wildcards.
+           case when coalesce(trim(p_author), '') = '' then null
+           else '%' || replace(replace(replace(trim(p_author), '\', '\\'), '%', '\%'), '_', '\_') || '%'
+           end as author_pattern
+  ),
+  matches as (
+    select a.id, a.slug, a.title, public.html_to_text(a.abstract) as abstract_text, a.published_at,
+           a.sort_order, i.published_at as issue_published_at,
+           case when q.tsq is null then 0 else ts_rank_cd(a.search_vector, q.tsq) end as rank,
+           q.tsq
+    from public.articles a
+    join public.issues i on i.id = a.issue_id
+    join public.volumes v on v.id = i.volume_id
+    left join public.categories c on c.id = a.category_id
+    cross join q
+    where a.deleted_at is null
+      and (q.tsq is null or a.search_vector @@ q.tsq)
+      and (p_year is null or v.year = p_year)
+      and (p_volume is null or v.volume_number = p_volume)
+      and (p_issue_id is null or a.issue_id = p_issue_id)
+      and (p_category_slug is null or c.slug = p_category_slug)
+      and (q.author_pattern is null or exists (
+            select 1 from public.public_article_authors aa
+            where aa.article_id = a.id and aa.full_name ilike q.author_pattern))
+  )
+  select m.id, m.slug, m.title,
+         case when m.tsq is null then m.title
+              else ts_headline('english', m.title, m.tsq,
+                     'StartSel=[[[, StopSel=]]], HighlightAll=true') end,
+         case when m.tsq is null then
+                -- The opening of the abstract, cut at a word with an ellipsis.
+                case when char_length(m.abstract_text) <= 280 then m.abstract_text
+                     else regexp_replace(left(m.abstract_text, 281), '[\s,;:.–—-]*\S*$', '') || '…' end
+              else ts_headline('english', m.abstract_text, m.tsq,
+                     'StartSel=[[[, StopSel=]]], MaxFragments=2, MaxWords=30, MinWords=12, FragmentDelimiter=" … "') end,
+         m.rank::real,
+         count(*) over ()
+  from matches m
+  -- Ties are broken all the way down to the id, so paging never repeats or
+  -- skips an article. Within one issue, articles follow its table of contents.
+  order by m.rank desc,
+           case when p_issue_id is not null then m.sort_order end,
+           m.published_at desc nulls last,
+           m.issue_published_at desc nulls last,
+           m.sort_order,
+           m.id
+  limit least(greatest(p_limit, 1), 50)
+  offset greatest(p_offset, 0)
+$$;
+
+grant execute on function public.html_to_text(text) to anon, authenticated;
+grant execute on function public.search_articles(text, int, int, uuid, text, text, int, int) to anon, authenticated;
+$awlel_migration$;
+    insert into supabase_migrations.schema_migrations (version, name) values ('20261018000014', 'public_fixes');
+    raise notice 'Applied update 20261018000014 (public_fixes)';
+  end if;
+end
+$awlel_wrap$;
+
+-- >>> migration 20261018000015_workflow_enums
+do $awlel_wrap$
+begin
+  if not exists (select 1 from supabase_migrations.schema_migrations where version = '20261018000015') then
+    execute $awlel_migration$
+-- =============================================================================
+-- Workflow fixes, part 1: new submission statuses (audit items 52, 53).
+--   revision_received  the author has sent a revised manuscript; it is with
+--                      the editors (shown instead of "Revisions requested")
+--   withdrawn          the author (or the editors) withdrew the manuscript;
+--                      terminal
+-- Postgres can't use a new enum value in the transaction that adds it, and
+-- the CLI runs each migration file in one transaction, so the values are
+-- added here and used from 20261018000016_workflow_fixes.sql onwards.
+-- Reversal: supabase/rollbacks/20261018000015_workflow_enums.down.sql
+-- =============================================================================
+
+alter type public.submission_status add value if not exists 'revision_received' after 'revisions_requested';
+alter type public.submission_status add value if not exists 'withdrawn' after 'published';
+$awlel_migration$;
+    insert into supabase_migrations.schema_migrations (version, name) values ('20261018000015', 'workflow_enums');
+    raise notice 'Applied update 20261018000015 (workflow_enums)';
+  end if;
+end
+$awlel_wrap$;
+
+-- >>> migration 20261018000016_workflow_fixes
+do $awlel_wrap$
+begin
+  if not exists (select 1 from supabase_migrations.schema_migrations where version = '20261018000016') then
+    execute $awlel_migration$
+-- =============================================================================
+-- Workflow fixes, part 2 (audit items 44, 48, 51-65): sign-in limits that
+-- count failures only, unfinished submissions, revisions with a response to
+-- the reviewers, withdrawal by the author, status transition rules, review
+-- rounds, closing reviews on a decision, publication of linked articles,
+-- confidential comments and accept/decline for reviewers, revision due dates
+-- and reminders, reminder bookkeeping that doesn't bump versions, and file
+-- versions that can't collide.
+--
+-- The new enum values from 20261018000015 are only ever compared inside
+-- PL/pgSQL bodies (checked when called, not when created) or as text, so this
+-- file also works when both run in one transaction (the production setup
+-- script).
+-- Reversal: supabase/rollbacks/20261018000016_workflow_fixes.down.sql
+-- =============================================================================
+
+-- ---------------------------------------------------------------------------
+-- 1. Rate limits (item 44): read a bucket without counting a hit, so sign-in
+--    can check before trying and count only failures.
+-- ---------------------------------------------------------------------------
+create or replace function public.peek_rate_limit(p_key text, p_limit int, p_window_seconds int)
+returns table (allowed boolean, remaining int, retry_after_seconds int)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  win_start timestamptz := to_timestamp(floor(extract(epoch from now()) / p_window_seconds) * p_window_seconds);
+  current_hits int;
+begin
+  select case when rl.window_start = win_start then rl.hits else 0 end into current_hits
+  from public.rate_limits rl where rl.key = p_key;
+  current_hits := coalesce(current_hits, 0);
+  allowed := current_hits < p_limit;
+  remaining := greatest(p_limit - current_hits, 0);
+  retry_after_seconds := case when allowed then 0
+    else ceil(extract(epoch from (win_start + make_interval(secs => p_window_seconds) - now())))::int end;
+  return next;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 2. New columns.
+-- ---------------------------------------------------------------------------
+alter table public.submissions
+  -- Set once the original Word manuscript is in and the author finished
+  -- submitting (item 51). Null = "not finished": hidden from the editors' queue.
+  add column if not exists finalised_at timestamptz,
+  -- Review round (item 58): a revised manuscript sent back to review starts a new one.
+  add column if not exists review_round int not null default 1 check (review_round between 1 and 50),
+  -- Revision due date and overdue reminders to the author (item 54).
+  add column if not exists revision_due_date date,
+  add column if not exists revision_reminder_sent_at timestamptz;
+
+alter table public.review_assignments
+  add column if not exists round int not null default 1 check (round between 1 and 50),
+  -- For the editors only: never shown to the author (item 60).
+  add column if not exists confidential_comments text check (char_length(confidential_comments) <= 100000),
+  -- The reviewer's answer to the invitation (item 60). Declining also withdraws the assignment.
+  add column if not exists response text check (response in ('accepted', 'declined')),
+  add column if not exists responded_at timestamptz,
+  add column if not exists decline_reason text check (char_length(decline_reason) <= 2000),
+  -- When an editor shared the comments with the author, anonymously (item 52).
+  add column if not exists shared_with_author_at timestamptz;
+
+-- The author's response to the reviewers, stored with the revised file (item 52).
+alter table public.submission_files
+  add column if not exists author_response text check (char_length(author_response) <= 20000);
+
+comment on column public.review_assignments.confidential_comments is
+  'Comments for the editors only. Authors have no read access to review_assignments; never copy this column anywhere they can see.';
+
+-- Submissions that were announced, have their Word manuscript, or are already
+-- with the editors count as finished.
+update public.submissions s
+set finalised_at = coalesce(
+  (select min(e.created_at) from public.domain_events e
+   where e.event_type = 'submission.created' and e.aggregate_id = s.id::text),
+  s.created_at)
+where s.finalised_at is null
+  and (s.status::text <> 'submitted'
+       or exists (select 1 from public.domain_events e
+                  where e.event_type = 'submission.created' and e.aggregate_id = s.id::text)
+       or exists (select 1 from public.submission_files f
+                  where f.submission_id = s.id and f.kind = 'original'
+                    and lower(f.original_name) like '%.docx'));
+
+create index if not exists submissions_unfinished_idx on public.submissions (created_at)
+  where finalised_at is null and deleted_at is null;
+
+-- ---------------------------------------------------------------------------
+-- 3. Reminder bookkeeping no longer bumps version or updated_at (item 61), so
+--    a reviewer or author with a form open doesn't get a false conflict.
+-- ---------------------------------------------------------------------------
+drop trigger if exists review_assignments_updated_at on public.review_assignments;
+create trigger review_assignments_updated_at before update on public.review_assignments
+  for each row execute function public.set_updated_at('reminder_sent_at');
+drop trigger if exists review_assignments_version on public.review_assignments;
+create trigger review_assignments_version before update on public.review_assignments
+  for each row execute function public.bump_version('reminder_sent_at');
+
+drop trigger if exists submissions_updated_at on public.submissions;
+create trigger submissions_updated_at before update on public.submissions
+  for each row execute function public.set_updated_at('revision_reminder_sent_at');
+drop trigger if exists submissions_version on public.submissions;
+create trigger submissions_version before update on public.submissions
+  for each row execute function public.bump_version('revision_reminder_sent_at');
+
+-- ---------------------------------------------------------------------------
+-- 4. Review rounds (item 58): one assignment per reviewer per round, so a
+--    revised manuscript can go back to the same reviewer.
+-- ---------------------------------------------------------------------------
+alter table public.review_assignments drop constraint if exists review_assignments_submission_id_reviewer_id_key;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'review_assignments_submission_reviewer_round_key') then
+    alter table public.review_assignments
+      add constraint review_assignments_submission_reviewer_round_key unique (submission_id, reviewer_id, round);
+  end if;
+end;
+$$;
+
+-- New assignments always belong to the submission's current round.
+create or replace function public.set_review_round()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  select s.review_round into new.round from public.submissions s where s.id = new.submission_id;
+  new.round := coalesce(new.round, 1);
+  return new;
+end;
+$$;
+drop trigger if exists review_assignments_round on public.review_assignments;
+create trigger review_assignments_round before insert on public.review_assignments
+  for each row execute function public.set_review_round();
+
+-- ---------------------------------------------------------------------------
+-- 5. File versions (item 65): computed in the database under a lock, and
+--    unique, so two uploads at once can't both become "version 2".
+-- ---------------------------------------------------------------------------
+with clashes as (
+  select submission_id, kind from public.submission_files
+  group by submission_id, kind, version having count(*) > 1
+), renumbered as (
+  select f.id, row_number() over (partition by f.submission_id, f.kind order by f.created_at, f.id) as v
+  from public.submission_files f
+  join (select distinct submission_id, kind from clashes) c using (submission_id, kind)
+)
+update public.submission_files f set version = r.v
+from renumbered r where r.id = f.id and f.version <> r.v;
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'submission_files_submission_kind_version_key') then
+    alter table public.submission_files
+      add constraint submission_files_submission_kind_version_key unique (submission_id, kind, version);
+  end if;
+end;
+$$;
+
+create or replace function public.next_submission_file_version()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform pg_advisory_xact_lock(hashtext('awlel:submission_files:' || new.submission_id::text || ':' || new.kind::text));
+  select coalesce(max(f.version), 0) + 1 into new.version
+  from public.submission_files f
+  where f.submission_id = new.submission_id and f.kind = new.kind;
+  return new;
+end;
+$$;
+drop trigger if exists submission_files_version on public.submission_files;
+create trigger submission_files_version before insert on public.submission_files
+  for each row execute function public.next_submission_file_version();
+
+-- ---------------------------------------------------------------------------
+-- 6. Status transitions (item 56). Withdrawn and published are final; a
+--    rejected manuscript can only be reopened for review, with a message.
+--    The app shows only these choices; the guard enforces them for everyone.
+-- ---------------------------------------------------------------------------
+create or replace function public.submission_transition_allowed(p_from public.submission_status, p_to public.submission_status)
+returns boolean
+language plpgsql
+immutable
+set search_path = ''
+as $$
+begin
+  return case p_from::text
+    when 'submitted' then p_to::text in ('under_screening', 'under_review', 'rejected', 'withdrawn')
+    when 'under_screening' then p_to::text in ('under_review', 'revisions_requested', 'rejected', 'withdrawn')
+    when 'under_review' then p_to::text in ('revisions_requested', 'accepted', 'rejected', 'withdrawn')
+    when 'revisions_requested' then p_to::text in ('revision_received', 'under_review', 'rejected', 'withdrawn')
+    when 'revision_received' then p_to::text in ('under_review', 'revisions_requested', 'accepted', 'rejected', 'withdrawn')
+    when 'accepted' then p_to::text in ('published', 'withdrawn')
+    when 'rejected' then p_to::text = 'under_review'
+    else false
+  end;
+end;
+$$;
+
+-- Trusted changes made by the workflow functions below (recording a
+-- revision, withdrawing, finalising, publishing) set the transaction-local
+-- awlel.system_change flag; nothing a client sends can set it.
+create or replace function public.guard_submission_changes()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not (auth.uid() is null or public.is_staff() or coalesce(current_setting('awlel.system_change', true), '') = 'on')
+     and (new.status is distinct from old.status
+          or new.author_id is distinct from old.author_id
+          or new.article_id is distinct from old.article_id
+          or new.idempotency_key is distinct from old.idempotency_key
+          or new.deleted_at is distinct from old.deleted_at
+          or new.finalised_at is distinct from old.finalised_at
+          or new.review_round is distinct from old.review_round
+          or new.revision_due_date is distinct from old.revision_due_date
+          or new.revision_reminder_sent_at is distinct from old.revision_reminder_sent_at) then
+    raise exception 'Not allowed to change these submission fields' using errcode = '42501';
+  end if;
+  if new.status is distinct from old.status then
+    if not public.submission_transition_allowed(old.status, new.status) then
+      raise exception 'A submission can''t move from "%" to "%".', old.status, new.status using errcode = 'AW422';
+    end if;
+    if new.status::text = 'published' and new.article_id is null then
+      raise exception 'Create the article before marking the submission as published.' using errcode = 'AW422';
+    end if;
+    -- A revised manuscript sent back to review starts a new round, so the
+    -- same reviewers can be invited again (item 58).
+    if new.status::text = 'under_review' and old.status::text in ('revisions_requested', 'revision_received')
+       and exists (select 1 from public.review_assignments r
+                   where r.submission_id = new.id and r.round = old.review_round) then
+      new.review_round := old.review_round + 1;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 7. Reviewers (items 60, 64): confidential comments, accept or decline. A
+--    reviewer may decline (which withdraws the assignment) but not withdraw
+--    otherwise, and can't touch bookkeeping columns.
+-- ---------------------------------------------------------------------------
+create or replace function public.guard_review_changes()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.uid() is null or public.is_staff() or coalesce(current_setting('awlel.system_change', true), '') = 'on' then
+    if new.response is distinct from old.response then
+      new.responded_at := case when new.response is null then null else now() end;
+    end if;
+    return new;
+  end if;
+  if old.status <> 'pending' then
+    raise exception 'This review has already been submitted or closed' using errcode = '42501';
+  end if;
+  if new.submission_id is distinct from old.submission_id
+     or new.reviewer_id is distinct from old.reviewer_id
+     or new.assigned_by is distinct from old.assigned_by
+     or new.due_date is distinct from old.due_date
+     or new.reminder_sent_at is distinct from old.reminder_sent_at
+     or new.round is distinct from old.round
+     or new.shared_with_author_at is distinct from old.shared_with_author_at
+     or (new.response is null and old.response is not null)
+     or (new.status = 'withdrawn' and new.response is distinct from 'declined')
+     or (new.response = 'declined' and new.status <> 'withdrawn') then
+    raise exception 'Reviewers may only edit their own review' using errcode = '42501';
+  end if;
+  if new.annotated_file_id is distinct from old.annotated_file_id and new.annotated_file_id is not null
+     and not exists (select 1 from public.submission_files f
+                     where f.id = new.annotated_file_id and f.submission_id = new.submission_id
+                       and f.kind = 'reviewer_annotated' and f.uploaded_by = auth.uid()) then
+    raise exception 'That file is not your annotated manuscript' using errcode = '42501';
+  end if;
+  -- Submitting a review means the invitation was accepted.
+  if new.status = 'submitted' then
+    new.submitted_at := now();
+    new.response := coalesce(new.response, 'accepted');
+  end if;
+  new.responded_at := case when new.response is distinct from old.response then now() else old.responded_at end;
+  if new.response is distinct from 'declined' then
+    new.decline_reason := old.decline_reason;
+  end if;
+  return new;
+end;
+$$;
+
+-- The reviewer's queue, now with the round, their answer to the invitation
+-- and their confidential comments (their own; still nothing about the author).
+drop function if exists public.reviewer_queue();
+create function public.reviewer_queue()
+returns table (
+  assignment_id uuid,
+  assignment_status public.review_status,
+  due_date date,
+  recommendation public.review_recommendation,
+  comments text,
+  confidential_comments text,
+  submitted_at timestamptz,
+  assignment_version int,
+  assigned_at timestamptz,
+  round int,
+  response text,
+  submission_id uuid,
+  title text,
+  abstract text,
+  keywords text[],
+  category_name text,
+  citation_style public.citation_style
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select r.id, r.status, r.due_date, r.recommendation, r.comments, r.confidential_comments, r.submitted_at,
+         r.version, r.created_at, r.round, r.response,
+         s.id, s.title, s.abstract, s.keywords, c.name, s.citation_style
+  from public.review_assignments r
+  join public.submissions s on s.id = r.submission_id and s.deleted_at is null
+  left join public.categories c on c.id = s.category_id
+  join public.profiles p on p.id = r.reviewer_id and p.is_active
+  where r.reviewer_id = auth.uid() and r.status <> 'withdrawn'
+  order by (r.status = 'pending') desc, r.due_date nulls last, r.created_at desc
+$$;
+
+-- Manuscript files for reviewers, now saying which is the PDF copy so it
+-- can be labelled as such (item 64). Still no names, paths or uploader.
+drop function if exists public.reviewer_files();
+create function public.reviewer_files()
+returns table (file_id uuid, submission_id uuid, kind public.submission_file_kind, version int,
+               created_at timestamptz, is_pdf boolean)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select distinct on (f.id) f.id, f.submission_id, f.kind, f.version, f.created_at,
+         f.mime_type = 'application/pdf'
+  from public.submission_files f
+  join public.review_assignments r on r.submission_id = f.submission_id
+  where r.reviewer_id = auth.uid() and r.status <> 'withdrawn' and f.kind in ('original', 'revision')
+  order by f.id, f.created_at
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 8. Status changes (items 54, 56, 59).
+-- ---------------------------------------------------------------------------
+drop function if exists public.change_submission_status(uuid, int, public.submission_status, text, boolean);
+create or replace function public.change_submission_status(
+  p_submission_id uuid,
+  p_expected_version int,
+  p_status public.submission_status,
+  p_message text default null,
+  p_visible_to_author boolean default true,
+  p_revision_due_date date default null
+)
+returns int
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_old public.submission_status;
+  v_version int;
+begin
+  select s.status into v_old from public.submissions s where s.id = p_submission_id;
+  if v_old = p_status then
+    raise exception 'The submission already has this status.' using errcode = 'AW422';
+  end if;
+  if v_old::text = 'rejected' and coalesce(btrim(p_message), '') = '' then
+    raise exception 'Add a message explaining why the manuscript is being reopened.' using errcode = 'AW422';
+  end if;
+  perform set_config('awlel.status_message', coalesce(p_message, ''), true);
+  perform set_config('awlel.status_message_visible', p_visible_to_author::text, true);
+  update public.submissions s set
+    status = p_status,
+    revision_due_date = case when p_status::text = 'revisions_requested'
+                             then coalesce(p_revision_due_date, (now() at time zone 'utc')::date + 28)
+                             else s.revision_due_date end,
+    revision_reminder_sent_at = case when p_status::text = 'revisions_requested' then null
+                                     else s.revision_reminder_sent_at end
+  where s.id = p_submission_id and s.version = p_expected_version and s.deleted_at is null
+  returning s.version into v_version;
+  if not found then
+    raise exception 'This submission was changed by someone else.' using errcode = 'AW409';
+  end if;
+  perform set_config('awlel.status_message', '', true);
+  return v_version;
+end;
+$$;
+
+-- A decision closes the reviews still outstanding (item 59). The app emails
+-- those reviewers; this makes sure no path leaves them open.
+create or replace function public.close_pending_reviews()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_prev text := current_setting('awlel.system_change', true);
+begin
+  if new.status::text in ('accepted', 'rejected', 'published', 'withdrawn') then
+    perform set_config('awlel.system_change', 'on', true);
+    update public.review_assignments set status = 'withdrawn'
+    where submission_id = new.id and status = 'pending';
+    perform set_config('awlel.system_change', coalesce(v_prev, ''), true);
+  end if;
+  return null;
+end;
+$$;
+drop trigger if exists submissions_close_reviews on public.submissions;
+create trigger submissions_close_reviews after update of status on public.submissions
+  for each row when (new.status is distinct from old.status)
+  execute function public.close_pending_reviews();
+
+-- Timeline note without a status change (item 55). Returns the new event's
+-- id, which the app uses as the email's idempotency key.
+drop function if exists public.add_submission_note(uuid, text, boolean);
+create function public.add_submission_note(p_submission_id uuid, p_message text, p_visible_to_author boolean)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_status public.submission_status;
+  v_id uuid;
+begin
+  if not public.is_staff() then
+    raise exception 'Not allowed' using errcode = '42501';
+  end if;
+  if coalesce(btrim(p_message), '') = '' then
+    raise exception 'Write the note first.' using errcode = 'AW422';
+  end if;
+  select s.status into v_status from public.submissions s where s.id = p_submission_id;
+  if not found then
+    raise exception 'Submission not found' using errcode = 'P0002';
+  end if;
+  insert into public.submission_events (submission_id, actor_id, from_status, to_status, message, visible_to_author)
+  values (p_submission_id, auth.uid(), v_status, v_status, left(p_message, 20000), p_visible_to_author)
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 9. Authors (items 51, 52, 53).
+-- ---------------------------------------------------------------------------
+
+-- Finishing a submission: needs the original Word manuscript (checked by
+-- kind and extension or type, case-insensitively). True the first time only,
+-- so the confirmation emails go out once.
+create or replace function public.finalize_submission(p_submission_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  s public.submissions;
+  v_rows int;
+  v_prev text := current_setting('awlel.system_change', true);
+begin
+  select * into s from public.submissions where id = p_submission_id and deleted_at is null;
+  if not found or (s.author_id is distinct from auth.uid() and not public.is_staff()) then
+    raise exception 'Not allowed' using errcode = '42501';
+  end if;
+  if s.finalised_at is not null then
+    return false;
+  end if;
+  if not exists (select 1 from public.submission_files f
+                 where f.submission_id = s.id and f.kind = 'original'
+                   and (lower(f.original_name) like '%.docx'
+                        or f.mime_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')) then
+    raise exception 'Please upload your manuscript as a Word document (.docx).' using errcode = 'AW422';
+  end if;
+  perform set_config('awlel.system_change', 'on', true);
+  update public.submissions set finalised_at = now() where id = s.id and finalised_at is null;
+  get diagnostics v_rows = row_count;
+  perform set_config('awlel.system_change', coalesce(v_prev, ''), true);
+  return v_rows = 1;
+end;
+$$;
+
+-- Recording a revised manuscript: stores the author's response to the
+-- reviewers with the file and moves the submission to "Revision received".
+-- Once per file: repeating the call records nothing new.
+drop function if exists public.record_revision(uuid);
+create function public.record_revision(p_file_id uuid, p_response text default null)
+returns table (submission_id uuid, title text, recorded boolean)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  f public.submission_files;
+  s public.submissions;
+  v_message text;
+  v_prev text := current_setting('awlel.system_change', true);
+begin
+  select * into f from public.submission_files where id = p_file_id;
+  if not found or f.kind <> 'revision' or f.uploaded_by is distinct from auth.uid() then
+    raise exception 'Not allowed' using errcode = '42501';
+  end if;
+  select * into s from public.submissions where id = f.submission_id;
+  if s.author_id is distinct from auth.uid() then
+    raise exception 'Not allowed' using errcode = '42501';
+  end if;
+  v_message := format('Revised manuscript (version %s) uploaded by the author.', f.version);
+  if exists (select 1 from public.submission_events e where e.submission_id = s.id and e.message = v_message) then
+    return query select s.id, s.title, false;
+    return;
+  end if;
+  if s.status::text <> 'revisions_requested' then
+    raise exception 'Not allowed' using errcode = '42501';
+  end if;
+  update public.submission_files set author_response = nullif(btrim(left(p_response, 20000)), '')
+  where id = f.id;
+  perform set_config('awlel.status_message', v_message, true);
+  perform set_config('awlel.status_message_visible', 'true', true);
+  perform set_config('awlel.system_change', 'on', true);
+  update public.submissions set status = 'revision_received' where id = s.id;
+  perform set_config('awlel.system_change', coalesce(v_prev, ''), true);
+  perform set_config('awlel.status_message', '', true);
+  return query select s.id, s.title, true;
+end;
+$$;
+
+-- Withdrawal by the author (item 53), before a decision. Final.
+create or replace function public.withdraw_submission(p_submission_id uuid, p_reason text default null)
+returns int
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  s public.submissions;
+  v_version int;
+  v_prev text := current_setting('awlel.system_change', true);
+begin
+  select * into s from public.submissions where id = p_submission_id and deleted_at is null;
+  if not found or s.author_id is distinct from auth.uid() then
+    raise exception 'Not allowed' using errcode = '42501';
+  end if;
+  if s.status::text not in ('submitted', 'under_screening', 'under_review', 'revisions_requested', 'revision_received') then
+    raise exception 'This manuscript can no longer be withdrawn here. Please contact the editors.' using errcode = 'AW422';
+  end if;
+  perform set_config('awlel.status_message',
+    'Withdrawn by the author.' || coalesce(E'\n\nReason: ' || nullif(btrim(left(p_reason, 2000)), ''), ''), true);
+  perform set_config('awlel.status_message_visible', 'true', true);
+  perform set_config('awlel.system_change', 'on', true);
+  update public.submissions set status = 'withdrawn' where id = s.id returning version into v_version;
+  perform set_config('awlel.system_change', coalesce(v_prev, ''), true);
+  perform set_config('awlel.status_message', '', true);
+  return v_version;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 10. Publication (item 57): when an article made from a submission is
+--     published in a published issue, the submission becomes "Published"
+--     and a submission.published event is recorded; the app emails the
+--     author once from that event.
+-- ---------------------------------------------------------------------------
+create or replace function public.sync_published_submissions()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  r record;
+  v_prev text := current_setting('awlel.system_change', true);
+begin
+  for r in
+    select s.id as submission_id, a.id as article_id
+    from public.articles a
+    join public.issues i on i.id = a.issue_id and i.status = 'published' and i.deleted_at is null
+    join public.submissions s on s.id = a.submission_id and s.deleted_at is null
+    where a.status = 'published' and a.deleted_at is null
+      and s.status = 'accepted'
+      and (s.article_id is null or s.article_id = a.id)
+      and case when tg_table_name = 'articles' then a.id = new.id else a.issue_id = new.id end
+  loop
+    perform set_config('awlel.system_change', 'on', true);
+    perform set_config('awlel.status_message', 'Your article has been published.', true);
+    perform set_config('awlel.status_message_visible', 'true', true);
+    update public.submissions set status = 'published', article_id = r.article_id where id = r.submission_id;
+    insert into public.domain_events (event_type, aggregate_type, aggregate_id, actor_id, payload)
+    values ('submission.published', 'submission', r.submission_id::text,
+            (select p.id from public.profiles p where p.id = auth.uid()),
+            jsonb_build_object('articleId', r.article_id));
+  end loop;
+  perform set_config('awlel.system_change', coalesce(v_prev, ''), true);
+  perform set_config('awlel.status_message', '', true);
+  return null;
+end;
+$$;
+drop trigger if exists articles_publish_submission on public.articles;
+create trigger articles_publish_submission after insert or update of status, issue_id, submission_id on public.articles
+  for each row when (new.status = 'published' and new.submission_id is not null)
+  execute function public.sync_published_submissions();
+drop trigger if exists issues_publish_submissions on public.issues;
+create trigger issues_publish_submissions after update of status on public.issues
+  for each row when (new.status = 'published' and old.status is distinct from new.status)
+  execute function public.sync_published_submissions();
+
+-- ---------------------------------------------------------------------------
+-- 11. Reminders (items 54, 59): reviews of closed submissions are never
+--     chased; authors are reminded of an overdue revision at most weekly.
+-- ---------------------------------------------------------------------------
+create or replace function public.due_review_reminders()
+returns table (assignment_id uuid, reviewer_email text, reviewer_name text, due_date date, title text)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select r.id, p.email::text, p.full_name, r.due_date, s.title
+  from public.review_assignments r
+  join public.profiles p on p.id = r.reviewer_id and p.is_active
+  join public.submissions s on s.id = r.submission_id and s.deleted_at is null
+  where r.status = 'pending'
+    and s.status::text not in ('accepted', 'rejected', 'published', 'withdrawn')
+    and r.due_date is not null
+    and r.due_date <= (now() at time zone 'utc')::date + 3
+    and (r.reminder_sent_at is null or r.reminder_sent_at < now() - interval '3 days')
+  order by r.due_date
+  limit 200
+$$;
+
+create or replace function public.due_revision_reminders()
+returns table (submission_id uuid, author_email text, author_name text, due_date date, title text)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select s.id, p.email::text, p.full_name, s.revision_due_date, s.title
+  from public.submissions s
+  join public.profiles p on p.id = s.author_id and p.is_active
+  where s.status = 'revisions_requested'
+    and s.deleted_at is null
+    and s.revision_due_date is not null
+    and s.revision_due_date < (now() at time zone 'utc')::date
+    and (s.revision_reminder_sent_at is null or s.revision_reminder_sent_at < now() - interval '7 days')
+  order by s.revision_due_date
+  limit 200
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 12. Grants.
+-- ---------------------------------------------------------------------------
+revoke execute on function public.peek_rate_limit(text, int, int) from public, anon, authenticated;
+grant execute on function public.peek_rate_limit(text, int, int) to service_role;
+revoke execute on function public.due_revision_reminders() from public, anon, authenticated;
+grant execute on function public.due_revision_reminders() to service_role;
+revoke execute on function public.due_review_reminders() from public, anon, authenticated;
+grant execute on function public.due_review_reminders() to service_role;
+
+do $$
+declare
+  f text;
+begin
+  foreach f in array array[
+    'reviewer_queue()', 'reviewer_files()',
+    'change_submission_status(uuid, int, public.submission_status, text, boolean, date)',
+    'add_submission_note(uuid, text, boolean)', 'finalize_submission(uuid)',
+    'record_revision(uuid, text)', 'withdraw_submission(uuid, text)',
+    'submission_transition_allowed(public.submission_status, public.submission_status)'
+  ] loop
+    execute format('revoke execute on function public.%s from public, anon', f);
+    execute format('grant execute on function public.%s to authenticated', f);
+  end loop;
+end;
+$$;
+$awlel_migration$;
+    insert into supabase_migrations.schema_migrations (version, name) values ('20261018000016', 'workflow_fixes');
+    raise notice 'Applied update 20261018000016 (workflow_fixes)';
+  end if;
+end
+$awlel_wrap$;
+
+-- >>> migration 20261018000017_admin_fixes
+do $awlel_wrap$
+begin
+  if not exists (select 1 from supabase_migrations.schema_migrations where version = '20261018000017') then
+    execute $awlel_migration$
+-- =============================================================================
+-- Admin dashboard fixes (audit items 68, 72, 73, 74, 76, 78, 81).
+--   * A published article or issue never loses its publication date (68).
+--   * Bulk upload gets unique web addresses automatically (72).
+--   * Moving an article to another issue puts it at the end of that issue (78).
+--   * A trashed issue can be deleted for good once its articles are gone (73).
+--   * Old issue and category addresses keep working after a renumber or a
+--     new web address (74, 81).
+--   * Every page save is kept as a revision, and edits to pages, settings,
+--     categories, board members and feature switches reach the audit log (76).
+-- Reversal: supabase/rollbacks/20261018000017_admin_fixes.down.sql
+-- =============================================================================
+
+-- ---------------------------------------------------------------------------
+-- 1. Publication dates (item 68). Saving a form with an empty date used to
+--    set published_at to NULL on a live article. Whatever writes the row, a
+--    published article or issue keeps its date (or gets today's); an editor
+--    can still change it to another date.
+-- ---------------------------------------------------------------------------
+create or replace function public.keep_published_at()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.status = 'published' and new.published_at is null then
+    new.published_at := coalesce(case when tg_op = 'UPDATE' then old.published_at end, now());
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists articles_keep_published_at on public.articles;
+create trigger articles_keep_published_at before insert or update on public.articles
+  for each row execute function public.keep_published_at();
+drop trigger if exists issues_keep_published_at on public.issues;
+create trigger issues_keep_published_at before insert or update on public.issues
+  for each row execute function public.keep_published_at();
+
+-- ---------------------------------------------------------------------------
+-- 2. Unique article web addresses (item 72). Slugs are unique across all
+--    articles, trashed ones included, and old addresses that now redirect are
+--    kept free too. Returns the slug itself when free, otherwise slug-2,
+--    slug-3, ... (still at most 80 characters).
+-- ---------------------------------------------------------------------------
+create or replace function public.unique_article_slug(p_slug text, p_except uuid default null)
+returns text
+language plpgsql
+stable
+set search_path = ''
+as $$
+declare
+  candidate text := p_slug;
+  n int := 1;
+begin
+  loop
+    exit when not exists (select 1 from public.articles a
+                          where a.slug = candidate and a.id is distinct from p_except)
+          and not exists (select 1 from public.slug_redirects r where r.old_slug = candidate);
+    n := n + 1;
+    candidate := regexp_replace(left(p_slug, 80 - length(n::text) - 1), '-+$', '') || '-' || n;
+  end loop;
+  return candidate;
+end;
+$$;
+
+-- save_article: as migration 7, plus
+--   * p_data.auto_slug = true makes the slug unique automatically (bulk upload);
+--     a slug typed by hand still fails with the friendly "already used" error;
+--   * an empty publication date never clears the date of a published article;
+--   * moving to another issue puts the article at the end of that issue (78).
+create or replace function public.save_article(
+  p_id uuid,
+  p_expected_version int,
+  p_data jsonb,
+  p_authors jsonb
+)
+returns table (id uuid, version int)
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_id uuid := p_id;
+  v_version int;
+  v_issue uuid := (p_data ->> 'issue_id')::uuid;
+  v_slug text := p_data ->> 'slug';
+begin
+  if coalesce((p_data ->> 'auto_slug')::boolean, false) then
+    v_slug := public.unique_article_slug(v_slug, v_id);
+  end if;
+
+  if v_id is null then
+    insert into public.articles (
+      issue_id, category_id, title, slug, abstract, keywords, first_page, last_page, doi,
+      citation_style, sort_order, published_at, submission_id, created_by, updated_by)
+    values (
+      v_issue,
+      nullif(p_data ->> 'category_id', '')::uuid,
+      p_data ->> 'title',
+      v_slug,
+      p_data ->> 'abstract',
+      coalesce(array(select jsonb_array_elements_text(p_data -> 'keywords')), '{}'),
+      nullif(p_data ->> 'first_page', '')::int,
+      nullif(p_data ->> 'last_page', '')::int,
+      nullif(p_data ->> 'doi', ''),
+      (p_data ->> 'citation_style')::public.citation_style,
+      coalesce((select max(a.sort_order) + 10 from public.articles a where a.issue_id = v_issue), 10),
+      nullif(p_data ->> 'published_at', '')::timestamptz,
+      nullif(p_data ->> 'submission_id', '')::uuid,
+      auth.uid(), auth.uid())
+    returning articles.id, articles.version into v_id, v_version;
+  else
+    update public.articles a set
+      issue_id = v_issue,
+      category_id = nullif(p_data ->> 'category_id', '')::uuid,
+      title = p_data ->> 'title',
+      slug = v_slug,
+      abstract = p_data ->> 'abstract',
+      keywords = coalesce(array(select jsonb_array_elements_text(p_data -> 'keywords')), '{}'),
+      first_page = nullif(p_data ->> 'first_page', '')::int,
+      last_page = nullif(p_data ->> 'last_page', '')::int,
+      doi = nullif(p_data ->> 'doi', ''),
+      citation_style = (p_data ->> 'citation_style')::public.citation_style,
+      sort_order = case
+        when a.issue_id is distinct from v_issue then
+          coalesce((select max(b.sort_order) + 10 from public.articles b where b.issue_id = v_issue), 10)
+        else a.sort_order end,
+      published_at = case
+        when a.status = 'published' then coalesce(nullif(p_data ->> 'published_at', '')::timestamptz, a.published_at)
+        else nullif(p_data ->> 'published_at', '')::timestamptz end,
+      updated_by = auth.uid()
+    where a.id = v_id and a.version = p_expected_version
+    returning a.version into v_version;
+    if not found then
+      raise exception 'This article was changed by someone else.' using errcode = 'AW409';
+    end if;
+    delete from public.article_authors aa where aa.article_id = v_id;
+  end if;
+
+  insert into public.article_authors (article_id, full_name, affiliation, email, show_email, orcid, position, is_corresponding)
+  select v_id,
+         x ->> 'full_name',
+         nullif(x ->> 'affiliation', ''),
+         nullif(x ->> 'email', ''),
+         coalesce((x ->> 'show_email')::boolean, false),
+         nullif(x ->> 'orcid', ''),
+         (ord - 1)::int,
+         coalesce((x ->> 'is_corresponding')::boolean, false)
+  from jsonb_array_elements(coalesce(p_authors, '[]'::jsonb)) with ordinality as t(x, ord);
+
+  -- Saving authors refreshed the search vector; return the final version.
+  select a.version into v_version from public.articles a where a.id = v_id;
+  return query select v_id, v_version;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 3. Delete a trashed issue for good (item 73). Super Admin only, like every
+--    other permanent delete. Allowed only when the issue is in the trash and
+--    every article in it is in the trash too; those trashed articles go with
+--    it. SECURITY INVOKER, so RLS still applies.
+-- ---------------------------------------------------------------------------
+create or replace function public.delete_issue_forever(p_issue_id uuid)
+returns void
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_deleted timestamptz;
+begin
+  if not public.is_super_admin() then
+    raise exception 'Only a Super Admin can delete an issue for good.' using errcode = '42501';
+  end if;
+  perform pg_advisory_xact_lock(hashtext('awlel:issue:' || p_issue_id::text));
+  select i.deleted_at into v_deleted from public.issues i where i.id = p_issue_id for update;
+  if not found then
+    raise exception 'Issue not found.' using errcode = 'P0002';
+  end if;
+  if v_deleted is null then
+    raise exception 'Move the issue to the trash first.' using errcode = 'AW422';
+  end if;
+  if exists (select 1 from public.articles a where a.issue_id = p_issue_id and a.deleted_at is null) then
+    raise exception 'This issue still has articles that are not in the trash.' using errcode = 'AW422';
+  end if;
+  delete from public.articles a where a.issue_id = p_issue_id;
+  delete from public.issues i where i.id = p_issue_id;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 4. Old issue addresses (item 74). /issues/{volume}/{issue} is built from
+--    the volume and issue numbers, so renumbering a published issue (or its
+--    volume) would break links. The old numbers are kept here and the public
+--    issue page redirects them to the issue's current address.
+-- ---------------------------------------------------------------------------
+create table if not exists public.issue_redirects (
+  volume_number int not null,
+  issue_number int not null,
+  issue_id uuid not null references public.issues (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (volume_number, issue_number)
+);
+create index if not exists issue_redirects_issue_idx on public.issue_redirects (issue_id);
+alter table public.issue_redirects enable row level security;
+
+drop policy if exists "issue_redirects: public read for published" on public.issue_redirects;
+create policy "issue_redirects: public read for published" on public.issue_redirects for select
+  using (exists (select 1 from public.issues i
+                 where i.id = issue_redirects.issue_id and i.status = 'published' and i.deleted_at is null));
+drop policy if exists "issue_redirects: staff read" on public.issue_redirects;
+create policy "issue_redirects: staff read" on public.issue_redirects for select to authenticated
+  using ((select public.is_staff()));
+
+-- Runs as definer: editors never write redirects directly.
+create or replace function public.record_issue_redirect()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  old_volume int;
+  new_volume int;
+begin
+  if tg_table_name = 'issues' then
+    if (new.volume_id, new.issue_number) is not distinct from (old.volume_id, old.issue_number) then
+      return new;
+    end if;
+    select v.volume_number into old_volume from public.volumes v where v.id = old.volume_id;
+    select v.volume_number into new_volume from public.volumes v where v.id = new.volume_id;
+    -- Only addresses people could have seen: the issue was live when renumbered.
+    if old.status = 'published' and old.deleted_at is null then
+      insert into public.issue_redirects (volume_number, issue_number, issue_id)
+      values (old_volume, old.issue_number, old.id)
+      on conflict (volume_number, issue_number) do update set issue_id = excluded.issue_id, created_at = now();
+    end if;
+    -- An address that is in use again must not also redirect elsewhere.
+    delete from public.issue_redirects r where r.volume_number = new_volume and r.issue_number = new.issue_number;
+  else
+    if new.volume_number is not distinct from old.volume_number then
+      return new;
+    end if;
+    insert into public.issue_redirects (volume_number, issue_number, issue_id)
+    select old.volume_number, i.issue_number, i.id
+    from public.issues i
+    where i.volume_id = new.id and i.status = 'published' and i.deleted_at is null
+    on conflict (volume_number, issue_number) do update set issue_id = excluded.issue_id, created_at = now();
+    delete from public.issue_redirects r
+    where r.volume_number = new.volume_number
+      and r.issue_number in (select i.issue_number from public.issues i where i.volume_id = new.id);
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists issues_redirect on public.issues;
+create trigger issues_redirect after update of volume_id, issue_number on public.issues
+  for each row execute function public.record_issue_redirect();
+drop trigger if exists volumes_redirect on public.volumes;
+create trigger volumes_redirect after update of volume_number on public.volumes
+  for each row execute function public.record_issue_redirect();
+
+-- ---------------------------------------------------------------------------
+-- 5. Old category addresses (item 81), the same way article slugs work.
+-- ---------------------------------------------------------------------------
+create table if not exists public.category_redirects (
+  old_slug text primary key,
+  category_id uuid not null references public.categories (id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+create index if not exists category_redirects_category_idx on public.category_redirects (category_id);
+alter table public.category_redirects enable row level security;
+
+drop policy if exists "category_redirects: public read" on public.category_redirects;
+create policy "category_redirects: public read" on public.category_redirects for select using (true);
+
+create or replace function public.record_category_redirect()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.slug is distinct from old.slug then
+    insert into public.category_redirects (old_slug, category_id)
+    values (old.slug, old.id)
+    on conflict (old_slug) do update set category_id = excluded.category_id, created_at = now();
+    delete from public.category_redirects where old_slug = new.slug;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists categories_slug_redirect on public.categories;
+create trigger categories_slug_redirect after update of slug on public.categories
+  for each row execute function public.record_category_redirect();
+
+-- ---------------------------------------------------------------------------
+-- 6. Page history (item 76): one row per saved version of a static page. The
+--    first save also keeps the version that was there before, so the
+--    original text can always be brought back.
+-- ---------------------------------------------------------------------------
+create table if not exists public.page_revisions (
+  id uuid primary key default gen_random_uuid(),
+  page_id uuid not null references public.pages (id) on delete cascade,
+  title text not null,
+  content text not null,
+  meta_description text,
+  saved_by uuid references public.profiles (id) on delete set null,
+  saved_at timestamptz not null default now()
+);
+create index if not exists page_revisions_page_idx on public.page_revisions (page_id, saved_at desc);
+create index if not exists page_revisions_saved_by_idx on public.page_revisions (saved_by);
+alter table public.page_revisions enable row level security;
+
+drop policy if exists "page_revisions: super admin read" on public.page_revisions;
+create policy "page_revisions: super admin read" on public.page_revisions for select to authenticated
+  using ((select public.is_super_admin()));
+
+create or replace function public.record_page_revision()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if (new.title, new.content, new.meta_description) is not distinct from
+     (old.title, old.content, old.meta_description) then
+    return new;
+  end if;
+  if not exists (select 1 from public.page_revisions r where r.page_id = old.id) then
+    insert into public.page_revisions (page_id, title, content, meta_description, saved_by, saved_at)
+    values (old.id, old.title, old.content, old.meta_description, old.updated_by, old.updated_at);
+  end if;
+  insert into public.page_revisions (page_id, title, content, meta_description, saved_by)
+  values (new.id, new.title, new.content, new.meta_description, coalesce(auth.uid(), new.updated_by));
+  return new;
+end;
+$$;
+
+drop trigger if exists pages_revision on public.pages;
+create trigger pages_revision after update on public.pages
+  for each row execute function public.record_page_revision();
+
+-- ---------------------------------------------------------------------------
+-- 7. Audit log (item 76): as migration 1, plus an 'update' entry when the
+--    content of a page, the settings, a category, a board member or a feature
+--    switch changes. The diff lists the changed field names, with old and new
+--    values only when they are short (never whole page bodies).
+-- ---------------------------------------------------------------------------
+create or replace function public.audit_changes()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  actor uuid := auth.uid();
+  entity text := tg_table_name;
+  rec_id text;
+  o jsonb := case when tg_op <> 'INSERT' then to_jsonb(old) end;
+  n jsonb := case when tg_op <> 'DELETE' then to_jsonb(new) end;
+  k text;
+  file_keys text[] := array['cover_file_id', 'full_pdf_file_id', 'full_docx_file_id',
+                            'pdf_file_id', 'docx_file_id', 'photo_file_id',
+                            'logo_file_id', 'default_og_image_file_id'];
+  fields text[] := '{}';
+  changes jsonb := '{}'::jsonb;
+begin
+  rec_id := coalesce(n ->> 'id', o ->> 'id', n ->> 'key', o ->> 'key');
+
+  if tg_op = 'DELETE' then
+    insert into public.audit_log (actor_id, action, entity_type, entity_id, diff)
+    values (actor, 'delete', entity, rec_id, jsonb_build_object('old', o));
+    return old;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if n ? 'status' and n ->> 'status' = 'published' then
+      insert into public.audit_log (actor_id, action, entity_type, entity_id, diff)
+      values (actor, 'publish', entity, rec_id, jsonb_build_object('status', n -> 'status'));
+    end if;
+    return new;
+  end if;
+
+  if n ? 'status' and (o ->> 'status') is distinct from (n ->> 'status') then
+    insert into public.audit_log (actor_id, action, entity_type, entity_id, diff)
+    values (actor,
+            case n ->> 'status' when 'published' then 'publish'
+                                when 'draft' then 'unpublish'
+                                else 'status_change' end,
+            entity, rec_id,
+            jsonb_build_object('from', o -> 'status', 'to', n -> 'status'));
+  end if;
+
+  if n ? 'deleted_at' and (o ->> 'deleted_at') is distinct from (n ->> 'deleted_at') then
+    insert into public.audit_log (actor_id, action, entity_type, entity_id, diff)
+    values (actor, case when n ->> 'deleted_at' is null then 'restore' else 'soft_delete' end,
+            entity, rec_id, '{}'::jsonb);
+  end if;
+
+  if entity = 'profiles' and ((o ->> 'role') is distinct from (n ->> 'role')
+      or (o ->> 'is_active') is distinct from (n ->> 'is_active')) then
+    insert into public.audit_log (actor_id, action, entity_type, entity_id, diff)
+    values (actor, 'role_change', entity, rec_id,
+            jsonb_build_object('from', jsonb_build_object('role', o -> 'role', 'is_active', o -> 'is_active'),
+                               'to', jsonb_build_object('role', n -> 'role', 'is_active', n -> 'is_active')));
+  end if;
+
+  foreach k in array file_keys loop
+    if n ? k and (o ->> k) is not null and (o ->> k) is distinct from (n ->> k) then
+      insert into public.audit_log (actor_id, action, entity_type, entity_id, diff)
+      values (actor, 'file_replace', entity, rec_id,
+              jsonb_build_object('field', k, 'from', o -> k, 'to', n -> k));
+    end if;
+  end loop;
+
+  if entity in ('pages', 'site_settings', 'categories', 'editorial_board_members', 'feature_flags') then
+    for k in
+      select key from jsonb_each(n)
+      where key <> all (file_keys || array['id', 'key', 'version', 'created_at', 'updated_at', 'updated_by',
+                                           'sort_order', 'status', 'deleted_at'])
+        and (o -> key) is distinct from (n -> key)
+      order by key
+    loop
+      fields := fields || k;
+      -- Short values are kept so the log can say "old → new"; long text is not.
+      if coalesce(length(o ->> k), 0) <= 120 and coalesce(length(n ->> k), 0) <= 120 then
+        changes := changes || jsonb_build_object(k, jsonb_build_object('from', o -> k, 'to', n -> k));
+      end if;
+    end loop;
+    if cardinality(fields) > 0 then
+      insert into public.audit_log (actor_id, action, entity_type, entity_id, diff)
+      values (actor, 'update', entity, rec_id,
+              jsonb_build_object('fields', to_jsonb(fields), 'changes', changes));
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+-- Pages were audited only when their content changed; titles count too.
+drop trigger if exists pages_audit on public.pages;
+create trigger pages_audit after update on public.pages
+  for each row execute function public.audit_changes();
+
+-- ---------------------------------------------------------------------------
+-- Grants
+-- ---------------------------------------------------------------------------
+revoke execute on function public.unique_article_slug(text, uuid) from public, anon;
+revoke execute on function public.delete_issue_forever(uuid) from public, anon;
+grant execute on function public.unique_article_slug(text, uuid) to authenticated;
+grant execute on function public.delete_issue_forever(uuid) to authenticated;
+revoke execute on function public.record_issue_redirect() from public, anon, authenticated;
+revoke execute on function public.record_category_redirect() from public, anon, authenticated;
+revoke execute on function public.record_page_revision() from public, anon, authenticated;
+$awlel_migration$;
+    insert into supabase_migrations.schema_migrations (version, name) values ('20261018000017', 'admin_fixes');
+    raise notice 'Applied update 20261018000017 (admin_fixes)';
+  end if;
+end
+$awlel_wrap$;
+
 -- >>> starting content (seed.sql), only for a site that has none yet
 do $awlel_wrap$
 begin
@@ -2973,8 +4303,8 @@ commit;
 
 -- >>> status
 select 'Database updates applied' as item,
-       (select count(*) from supabase_migrations.schema_migrations where version in ('20261017000001','20261017000002','20261017000003','20261017000004','20261017000005','20261017000006','20261017000007','20261017000008','20261017000009','20261017000010','20261017000011','20261017000012','20261018000013'))::text
-         || ' of 13' as status
+       (select count(*) from supabase_migrations.schema_migrations where version in ('20261017000001','20261017000002','20261017000003','20261017000004','20261017000005','20261017000006','20261017000007','20261017000008','20261017000009','20261017000010','20261017000011','20261017000012','20261018000013','20261018000014','20261018000015','20261018000016','20261018000017'))::text
+         || ' of 17' as status
 union all select 'Subject categories', (select count(*) from public.categories)::text
 union all select 'Static pages', (select count(*) from public.pages)::text
 union all select 'Published issues', (select count(*) from public.issues where status = 'published')::text

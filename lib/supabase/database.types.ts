@@ -288,6 +288,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      category_redirects: {
+        Row: {
+          category_id: string;
+          created_at: string;
+          old_slug: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          category_id: string;
+          created_at?: string;
+          old_slug: string;
+        };
+        Update: {
+          category_id?: string;
+          created_at?: string;
+          old_slug?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "category_redirects_category_id_fkey";
+            columns: ["category_id"];
+            isOneToOne: false;
+            referencedRelation: "categories";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       circuit_breakers: {
         Row: {
           failures: number;
@@ -667,6 +694,36 @@ export type Database = {
           },
         ];
       };
+      issue_redirects: {
+        Row: {
+          created_at: string;
+          issue_id: string;
+          issue_number: number;
+          volume_number: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          issue_id: string;
+          issue_number: number;
+          volume_number: number;
+        };
+        Update: {
+          created_at?: string;
+          issue_id?: string;
+          issue_number?: number;
+          volume_number?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "issue_redirects_issue_id_fkey";
+            columns: ["issue_id"];
+            isOneToOne: false;
+            referencedRelation: "issues";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       issues: {
         Row: {
           cover_alt: string | null;
@@ -903,6 +960,52 @@ export type Database = {
           },
         ];
       };
+      page_revisions: {
+        Row: {
+          content: string;
+          id: string;
+          meta_description: string | null;
+          page_id: string;
+          saved_at: string;
+          saved_by: string | null;
+          title: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          content: string;
+          id?: string;
+          meta_description?: string | null;
+          page_id: string;
+          saved_at?: string;
+          saved_by?: string | null;
+          title: string;
+        };
+        Update: {
+          content?: string;
+          id?: string;
+          meta_description?: string | null;
+          page_id?: string;
+          saved_at?: string;
+          saved_by?: string | null;
+          title?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "page_revisions_page_id_fkey";
+            columns: ["page_id"];
+            isOneToOne: false;
+            referencedRelation: "pages";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "page_revisions_saved_by_fkey";
+            columns: ["saved_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       pages: {
         Row: {
           content: string;
@@ -1012,12 +1115,18 @@ export type Database = {
           annotated_file_id: string | null;
           assigned_by: string | null;
           comments: string | null;
+          confidential_comments: string | null;
           created_at: string;
+          decline_reason: string | null;
           due_date: string | null;
           id: string;
           recommendation: Database["public"]["Enums"]["review_recommendation"] | null;
           reminder_sent_at: string | null;
+          responded_at: string | null;
+          response: string | null;
           reviewer_id: string;
+          round: number;
+          shared_with_author_at: string | null;
           status: Database["public"]["Enums"]["review_status"];
           submission_id: string;
           submitted_at: string | null;
@@ -1029,12 +1138,18 @@ export type Database = {
           annotated_file_id?: string | null;
           assigned_by?: string | null;
           comments?: string | null;
+          confidential_comments?: string | null;
           created_at?: string;
+          decline_reason?: string | null;
           due_date?: string | null;
           id?: string;
           recommendation?: Database["public"]["Enums"]["review_recommendation"] | null;
           reminder_sent_at?: string | null;
+          responded_at?: string | null;
+          response?: string | null;
           reviewer_id: string;
+          round?: number;
+          shared_with_author_at?: string | null;
           status?: Database["public"]["Enums"]["review_status"];
           submission_id: string;
           submitted_at?: string | null;
@@ -1045,12 +1160,18 @@ export type Database = {
           annotated_file_id?: string | null;
           assigned_by?: string | null;
           comments?: string | null;
+          confidential_comments?: string | null;
           created_at?: string;
+          decline_reason?: string | null;
           due_date?: string | null;
           id?: string;
           recommendation?: Database["public"]["Enums"]["review_recommendation"] | null;
           reminder_sent_at?: string | null;
+          responded_at?: string | null;
+          response?: string | null;
           reviewer_id?: string;
+          round?: number;
+          shared_with_author_at?: string | null;
           status?: Database["public"]["Enums"]["review_status"];
           submission_id?: string;
           submitted_at?: string | null;
@@ -1096,6 +1217,8 @@ export type Database = {
           issn: string;
           journal_name: string;
           journal_short_name: string;
+          license_name: string | null;
+          license_url: string | null;
           logo_file_id: string | null;
           postal_address: string | null;
           publication_frequency: string | null;
@@ -1114,6 +1237,8 @@ export type Database = {
           issn: string;
           journal_name: string;
           journal_short_name?: string;
+          license_name?: string | null;
+          license_url?: string | null;
           logo_file_id?: string | null;
           postal_address?: string | null;
           publication_frequency?: string | null;
@@ -1131,6 +1256,8 @@ export type Database = {
           issn?: string;
           journal_name?: string;
           journal_short_name?: string;
+          license_name?: string | null;
+          license_url?: string | null;
           logo_file_id?: string | null;
           postal_address?: string | null;
           publication_frequency?: string | null;
@@ -1333,6 +1460,7 @@ export type Database = {
       };
       submission_files: {
         Row: {
+          author_response: string | null;
           created_at: string;
           id: string;
           kind: Database["public"]["Enums"]["submission_file_kind"];
@@ -1346,6 +1474,7 @@ export type Database = {
         };
         ComputedFields: never;
         Insert: {
+          author_response?: string | null;
           created_at?: string;
           id?: string;
           kind: Database["public"]["Enums"]["submission_file_kind"];
@@ -1358,6 +1487,7 @@ export type Database = {
           version?: number;
         };
         Update: {
+          author_response?: string | null;
           created_at?: string;
           id?: string;
           kind?: Database["public"]["Enums"]["submission_file_kind"];
@@ -1397,9 +1527,13 @@ export type Database = {
           created_at: string;
           declarations: NonNullable<Json>;
           deleted_at: string | null;
+          finalised_at: string | null;
           id: string;
           idempotency_key: string;
           keywords: string[];
+          review_round: number;
+          revision_due_date: string | null;
+          revision_reminder_sent_at: string | null;
           status: Database["public"]["Enums"]["submission_status"];
           title: string;
           updated_at: string;
@@ -1416,9 +1550,13 @@ export type Database = {
           created_at?: string;
           declarations?: NonNullable<Json>;
           deleted_at?: string | null;
+          finalised_at?: string | null;
           id?: string;
           idempotency_key: string;
           keywords?: string[];
+          review_round?: number;
+          revision_due_date?: string | null;
+          revision_reminder_sent_at?: string | null;
           status?: Database["public"]["Enums"]["submission_status"];
           title: string;
           updated_at?: string;
@@ -1434,9 +1572,13 @@ export type Database = {
           created_at?: string;
           declarations?: NonNullable<Json>;
           deleted_at?: string | null;
+          finalised_at?: string | null;
           id?: string;
           idempotency_key?: string;
           keywords?: string[];
+          review_round?: number;
+          revision_due_date?: string | null;
+          revision_reminder_sent_at?: string | null;
           status?: Database["public"]["Enums"]["submission_status"];
           title?: string;
           updated_at?: string;
@@ -1544,7 +1686,7 @@ export type Database = {
     Functions: {
       add_submission_note: {
         Args: { p_message: string; p_submission_id: string; p_visible_to_author: boolean };
-        Returns: undefined;
+        Returns: string;
       };
       article_search_document: { Args: { p_article_id: string }; Returns: unknown };
       breaker_allows: { Args: { p_name: string }; Returns: boolean };
@@ -1567,6 +1709,7 @@ export type Database = {
         Args: {
           p_expected_version: number;
           p_message?: string;
+          p_revision_due_date?: string;
           p_status: Database["public"]["Enums"]["submission_status"];
           p_submission_id: string;
           p_visible_to_author?: boolean;
@@ -1638,6 +1781,7 @@ export type Database = {
         Returns: Database["public"]["Enums"]["user_role"];
       };
       defer_job: { Args: { p_id: number; p_retry_in_ms: number }; Returns: undefined };
+      delete_issue_forever: { Args: { p_issue_id: string }; Returns: undefined };
       due_review_reminders: {
         Args: Record<PropertyKey, never>;
         Returns: {
@@ -1648,13 +1792,25 @@ export type Database = {
           title: string;
         }[];
       };
+      due_revision_reminders: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          author_email: string;
+          author_name: string;
+          due_date: string;
+          submission_id: string;
+          title: string;
+        }[];
+      };
       errors_since: { Args: { p_minutes: number }; Returns: number };
       fail_job: {
         Args: { p_error: string; p_id: number; p_retry_in_ms: number; p_retryable: boolean };
         Returns: string;
       };
       feature_enabled: { Args: { p_key: string }; Returns: boolean };
+      finalize_submission: { Args: { p_submission_id: string }; Returns: boolean };
       finish_job: { Args: { p_id: number }; Returns: undefined };
+      html_to_text: { Args: { p_html: string }; Returns: string };
       is_assigned_reviewer: { Args: { p_submission_id: string }; Returns: boolean };
       is_published_article: { Args: { p_article_id: string }; Returns: boolean };
       is_staff: { Args: Record<PropertyKey, never>; Returns: boolean };
@@ -1683,6 +1839,14 @@ export type Database = {
           name: string;
         }[];
       };
+      peek_rate_limit: {
+        Args: { p_key: string; p_limit: number; p_window_seconds: number };
+        Returns: {
+          allowed: boolean;
+          remaining: number;
+          retry_after_seconds: number;
+        }[];
+      };
       record_app_error: { Args: Record<PropertyKey, never>; Returns: undefined };
       record_metric_event: {
         Args: {
@@ -1694,7 +1858,7 @@ export type Database = {
         Returns: boolean;
       };
       record_revision: {
-        Args: { p_file_id: string };
+        Args: { p_file_id: string; p_response?: string };
         Returns: {
           recorded: boolean;
           submission_id: string;
@@ -1709,6 +1873,7 @@ export type Database = {
         Returns: {
           created_at: string;
           file_id: string;
+          is_pdf: boolean;
           kind: Database["public"]["Enums"]["submission_file_kind"];
           submission_id: string;
           version: number;
@@ -1725,9 +1890,12 @@ export type Database = {
           category_name: string;
           citation_style: Database["public"]["Enums"]["citation_style"];
           comments: string;
+          confidential_comments: string;
           due_date: string;
           keywords: string[];
           recommendation: Database["public"]["Enums"]["review_recommendation"];
+          response: string;
+          round: number;
           submission_id: string;
           submitted_at: string;
           title: string;
@@ -1774,6 +1942,15 @@ export type Database = {
         Returns: number;
       };
       submission_id_from_path: { Args: { p_name: string }; Returns: string };
+      submission_transition_allowed: {
+        Args: {
+          p_from: Database["public"]["Enums"]["submission_status"];
+          p_to: Database["public"]["Enums"]["submission_status"];
+        };
+        Returns: boolean;
+      };
+      unique_article_slug: { Args: { p_except?: string; p_slug: string }; Returns: string };
+      withdraw_submission: { Args: { p_reason?: string; p_submission_id: string }; Returns: number };
     };
     Enums: {
       citation_style: "apa7" | "mla8";
@@ -1796,9 +1973,11 @@ export type Database = {
         | "under_screening"
         | "under_review"
         | "revisions_requested"
+        | "revision_received"
         | "accepted"
         | "rejected"
-        | "published";
+        | "published"
+        | "withdrawn";
       user_role: "super_admin" | "editor" | "reviewer" | "author";
     };
     CompositeTypes: {
@@ -1934,9 +2113,11 @@ export const Constants = {
         "under_screening",
         "under_review",
         "revisions_requested",
+        "revision_received",
         "accepted",
         "rejected",
         "published",
+        "withdrawn",
       ],
       user_role: ["super_admin", "editor", "reviewer", "author"],
     },
