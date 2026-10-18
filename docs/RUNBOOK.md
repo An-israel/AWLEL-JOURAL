@@ -71,8 +71,11 @@ Each alert email says what is wrong; this table says where to go.
 
 Symptoms: editors see “The upload didn't finish” or the progress bar stops.
 
-1. Try a small file. If small files work, the file may exceed the limit (100 MB for published files, 20 MB for
-   manuscripts) or have the wrong type (PDF or Word `.docx` only; covers are images).
+1. Try a small file. If small files work, the file may exceed the limit (50 MB for published files, 20 MB for
+   manuscripts) or have the wrong type (PDF or Word `.docx` only; covers are images). 50 MB is the most
+   Supabase's Free plan accepts for one file: compress a larger PDF (for example with "Reduce file size" in
+   your PDF program) or split a full issue. Supabase Pro allows larger files; raising the site's limit then is
+   a small change for a developer (`lib/admin/file-slots.ts` and the `published-files` bucket).
 2. Check Supabase status and Admin → Operations → Storage latency.
 3. Check the browser's network tab for the upload request to `…supabase.co/storage/…`: a 4xx means the signed
    link expired (retry the upload), a 5xx means Storage itself is failing (wait, then retry).

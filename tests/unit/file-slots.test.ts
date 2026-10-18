@@ -15,6 +15,12 @@ describe("checkFile", () => {
       /larger than 10 MB/,
     );
   });
+  it("keeps published files within the 50 MB Supabase Free accepts", () => {
+    const big = { name: "Vol25_Issue1.pdf", type: MIME.pdf, size: 51 * 1024 * 1024 };
+    expect(checkFile("issue_pdf", big)).toMatch(/larger than 50 MB/);
+    expect(checkFile("article_pdf", big)).toMatch(/larger than 50 MB/);
+    expect(checkFile("issue_pdf", { ...big, size: 49 * 1024 * 1024 })).toBeNull();
+  });
 });
 
 describe("safeFileName", () => {
