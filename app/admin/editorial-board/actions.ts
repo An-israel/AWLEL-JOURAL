@@ -23,7 +23,7 @@ export async function saveGroup(input: {
     .object({
       id: z.uuid().optional(),
       expectedVersion: z.number().int().optional(),
-      name: z.string().trim().min(2, "Enter a name.").max(120),
+      name: z.string().trim().min(2, "Enter a name.").max(120, "Keep the name under 120 characters."),
     })
     .safeParse(input);
   if (!parsed.success) return invalid(parsed.error);
@@ -72,9 +72,9 @@ const memberSchema = z.object({
   id: z.uuid().optional(),
   expectedVersion: z.number().int().optional(),
   groupId: z.uuid("Choose a group."),
-  name: z.string().trim().min(2, "Enter the name.").max(200),
-  title: z.string().trim().max(200).optional(),
-  affiliation: z.string().trim().max(400).optional(),
+  name: z.string().trim().min(2, "Enter the name.").max(200, "Keep the name under 200 characters."),
+  title: z.string().trim().max(200, "Keep the title under 200 characters.").optional(),
+  affiliation: z.string().trim().max(400, "Keep the affiliation under 400 characters.").optional(),
   needsVerification: z.boolean(),
 });
 

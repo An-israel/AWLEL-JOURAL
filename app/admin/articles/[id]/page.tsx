@@ -30,7 +30,7 @@ async function Content({ params }: { params: Props["params"] }) {
     .eq("id", id)
     .maybeSingle();
   if (!a) notFound();
-  const options = await loadArticleOptions(a.category_id);
+  const options = await loadArticleOptions(a.category_id, a.issue_id);
 
   return (
     <>
@@ -48,6 +48,7 @@ async function Content({ params }: { params: Props["params"] }) {
           deleted: Boolean(a.deleted_at),
           publicPath: `/articles/${a.slug}`,
           issuePublished: a.issue.status === "published" && !a.issue.deleted_at,
+          issueInTrash: Boolean(a.issue.deleted_at),
           issueId: a.issue_id,
           categoryId: a.category_id ?? "",
           title: a.title,

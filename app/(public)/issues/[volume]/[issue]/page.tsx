@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { Suspense } from "react";
 import { ArticleRow } from "@/components/catalog/article-row";
 import { Breadcrumbs } from "@/components/catalog/breadcrumbs";
@@ -9,6 +9,7 @@ import { IssueCover } from "@/components/catalog/issue-cover";
 import { RichText } from "@/components/catalog/rich-text";
 import { JsonLd } from "@/components/seo/json-ld";
 import { getIssue, getPublishedIssues, type IssueDetail } from "@/lib/data/catalog";
+import { findIssueRedirect } from "@/lib/data/redirects";
 import { getSiteSettings } from "@/lib/data/site-settings";
 import { siteUrl } from "@/lib/env.public";
 import { plural } from "@/lib/plural";
@@ -225,7 +226,13 @@ export default async function IssuePage({ params }: Props) {
   // Checked before anything streams, so a missing issue gets a real 404
   // status rather than a 200 page (item 20). The lookup is cached.
   const issue = await load(params);
-  if (!issue) notFound();
+  if (!issue) {
+    // A renumbered issue keeps its old address (item 74).
+    const p = await params;
+    const moved = await findIssueRedirect(p.volume, p.issue);
+    if (moved) permanentRedirect(moved);
+    notFound();
+  }
 
   return (
     <Suspense fallback={<IssueSkeleton />}>

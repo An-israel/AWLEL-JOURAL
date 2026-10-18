@@ -9,6 +9,7 @@ import { ConfirmDialog, Dialog, DialogContent, DialogHeader } from "@/components
 import { FieldError, Input, Label, Textarea } from "@/components/ui/input";
 import { toast } from "@/components/ui/toaster";
 import { slugify } from "@/lib/admin/slug";
+import { siteUrl } from "@/lib/env.public";
 import { reorderCategories, saveCategory, setCategoryArchived } from "./actions";
 
 export interface CategoryRow {
@@ -22,6 +23,8 @@ export interface CategoryRow {
 }
 
 type Editing = { row: CategoryRow | null } | null;
+
+const SITE = siteUrl.replace(/\/$/, "");
 
 export function CategoriesManager({ initial }: { initial: CategoryRow[] }) {
   const [rows, setRows] = useState(initial);
@@ -236,7 +239,7 @@ function CategoryDialog({
             <FieldError id="cat-name-error">{errors.name}</FieldError>
           </div>
           <div>
-            <Label htmlFor="cat-slug">URL slug</Label>
+            <Label htmlFor="cat-slug">Web address</Label>
             <Input
               id="cat-slug"
               value={slug}
@@ -246,11 +249,20 @@ function CategoryDialog({
               }}
               className="mt-1.5 font-mono"
               aria-invalid={errors.slug ? true : undefined}
-              aria-describedby="cat-slug-error cat-slug-hint"
+              aria-describedby="cat-slug-error cat-slug-hint cat-slug-warning"
             />
-            <p id="cat-slug-hint" className="mt-1 text-xs text-ink-muted">
-              Page address: /categories/{slug || "…"}
+            <p id="cat-slug-hint" className="mt-1 text-xs break-all text-ink-muted">
+              The last part of the category page&rsquo;s address: {SITE}/categories/
+              <strong className="font-semibold text-ink">{slug || "…"}</strong>. Use lowercase letters,
+              numbers and hyphens.
             </p>
+            {row && slug !== row.slug && row.articleCount > 0 ? (
+              <p id="cat-slug-warning" className="mt-1 text-xs text-[#7A4F18]">
+                This category has {row.articleCount} {row.articleCount === 1 ? "article" : "articles"}, and
+                people may have saved or shared its address. The old address /categories/{row.slug} will keep
+                working and send readers to the new one.
+              </p>
+            ) : null}
             <FieldError id="cat-slug-error">{errors.slug}</FieldError>
           </div>
           <div>

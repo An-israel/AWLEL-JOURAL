@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, NativeSelect } from "@/components/ui/input";
 import { Table, TBody, Td, Th, THead, Tr } from "@/components/ui/table";
-import { loadArticleOptions } from "@/lib/admin/article-data";
+import { issueOptionLabel, loadArticleOptions } from "@/lib/admin/article-data";
+import { loadAdminIssues } from "@/lib/admin/issue-data";
 import { requireRole } from "@/lib/auth";
 import { STAFF_ROLES } from "@/lib/roles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -32,8 +33,9 @@ async function Content({ searchParams }: { searchParams: Props["searchParams"] }
   const f = filtersSchema.parse(await searchParams);
   const page = f.page ?? 1;
   const supabase = await createSupabaseServerClient();
-  const options = await loadArticleOptions();
-  const issueLabel = new Map(options.issues.map((i) => [i.id, i.label]));
+  const [options, allIssues] = await Promise.all([loadArticleOptions(), loadAdminIssues()]);
+  // Every issue, trashed and draft ones included, so no article shows "—" (item 79).
+  const issueById = new Map(allIssues.map((i) => [i.id, i]));
 
   let query = supabase
     .from("articles")
@@ -136,36 +138,48 @@ async function Content({ searchParams }: { searchParams: Props["searchParams"] }
             </tr>
           </THead>
           <TBody>
-            {data.map((a) => (
-              <Tr key={a.id}>
-                <Td>
-                  <Link href={`/admin/articles/${a.id}`} className="font-medium">
-                    {a.title}
-                  </Link>
-                </Td>
-                <Td className="hidden text-ink-muted md:table-cell">{issueLabel.get(a.issue_id) ?? "—"}</Td>
-                <Td className="hidden text-ink-muted lg:table-cell">{a.category?.name ?? "—"}</Td>
-                <Td>
-                  {a.deleted_at ? (
-                    <Badge variant="muted">Trash</Badge>
-                  ) : a.status === "published" ? (
-                    <Badge variant="green">Published</Badge>
-                  ) : (
-                    <Badge variant="gold">Draft</Badge>
-                  )}
-                </Td>
-                <Td className="hidden text-right tabular-nums xl:table-cell">
-                  {a.view_count.toLocaleString("en")}
-                </Td>
-                <Td
-                  className="hidden text-right tabular-nums xl:table-cell"
-                  title={`${a.download_pdf_count} PDF · ${a.download_docx_count} Word`}
-                >
-                  {(a.download_pdf_count + a.download_docx_count).toLocaleString("en")}
-                </Td>
-                <Td className="hidden text-ink-muted md:table-cell">{date.format(new Date(a.updated_at))}</Td>
-              </Tr>
-            ))}
+            {data.map((a) => {
+              const issue = issueById.get(a.issue_id);
+              const live = issue?.status === "published" && !issue.deleted;
+              return (
+                <Tr key={a.id}>
+                  <Td>
+                    <Link href={`/admin/articles/${a.id}`} className="font-medium">
+                      {a.title}
+                    </Link>
+                  </Td>
+                  <Td className="hidden text-ink-muted md:table-cell">
+                    {issue ? issueOptionLabel(issue) : "—"}
+                  </Td>
+                  <Td className="hidden text-ink-muted lg:table-cell">{a.category?.name ?? "—"}</Td>
+                  <Td>
+                    {a.deleted_at ? (
+                      <Badge variant="muted">Trash</Badge>
+                    ) : a.status === "published" && !live ? (
+                      <Badge variant="gold" title="Marked as published, but its issue isn't on the site">
+                        Not live
+                      </Badge>
+                    ) : a.status === "published" ? (
+                      <Badge variant="green">Published</Badge>
+                    ) : (
+                      <Badge variant="gold">Draft</Badge>
+                    )}
+                  </Td>
+                  <Td className="hidden text-right tabular-nums xl:table-cell">
+                    {a.view_count.toLocaleString("en")}
+                  </Td>
+                  <Td
+                    className="hidden text-right tabular-nums xl:table-cell"
+                    title={`${a.download_pdf_count} PDF · ${a.download_docx_count} Word`}
+                  >
+                    {(a.download_pdf_count + a.download_docx_count).toLocaleString("en")}
+                  </Td>
+                  <Td className="hidden text-ink-muted md:table-cell">
+                    {date.format(new Date(a.updated_at))}
+                  </Td>
+                </Tr>
+              );
+            })}
           </TBody>
         </Table>
       )}

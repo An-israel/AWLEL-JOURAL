@@ -5,6 +5,7 @@ import { ArticleRow } from "@/components/catalog/article-row";
 import { IssueCover } from "@/components/catalog/issue-cover";
 import { RichText } from "@/components/catalog/rich-text";
 import { PreviewBanner } from "@/components/admin/preview-banner";
+import { Badge } from "@/components/ui/badge";
 import { previewArticles, previewIssueSummary } from "@/lib/admin/preview-data";
 import { requireRole } from "@/lib/auth";
 import { STAFF_ROLES } from "@/lib/roles";
@@ -41,7 +42,21 @@ async function Content({ params }: { params: Props["params"] }) {
       <h3 className="mt-12 border-b-2 border-navy pb-3 text-2xl">Contents</h3>
       <div className="divide-y divide-line">
         {articles.map((a) => (
-          <ArticleRow key={a.id} article={{ ...a, hasPdf: false, hasDocx: false }} />
+          <div key={a.id}>
+            {/* Notes for the editor only: downloads stay off in previews, so say what readers will get. */}
+            <p className="flex flex-wrap gap-1.5 pt-4" aria-label={`Preview notes for ${a.title}`}>
+              {a.status === "draft" ? (
+                <Badge variant="gold">Draft: hidden unless you publish it</Badge>
+              ) : null}
+              {a.hasPdf ? <Badge variant="green">PDF ready</Badge> : <Badge variant="coral">No PDF</Badge>}
+              {a.hasDocx ? (
+                <Badge variant="green">Word ready</Badge>
+              ) : (
+                <Badge variant="muted">No Word file</Badge>
+              )}
+            </p>
+            <ArticleRow article={{ ...a, hasPdf: false, hasDocx: false }} />
+          </div>
         ))}
       </div>
     </>

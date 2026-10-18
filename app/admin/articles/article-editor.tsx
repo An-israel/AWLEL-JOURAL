@@ -16,6 +16,7 @@ import { FieldError, Input, Label, NativeSelect } from "@/components/ui/input";
 import { toast } from "@/components/ui/toaster";
 import { slugify } from "@/lib/admin/slug";
 import type { AttachedFile } from "@/lib/admin/uploads";
+import { siteUrl } from "@/lib/env.public";
 import { saveArticle, setArticleDeleted, setArticleStatus } from "./actions";
 import type { AuthorInput } from "./schema";
 
@@ -26,6 +27,7 @@ export interface ArticleEditorData {
   deleted: boolean;
   publicPath: string;
   issuePublished: boolean;
+  issueInTrash: boolean;
   issueId: string;
   categoryId: string;
   title: string;
@@ -48,6 +50,8 @@ interface Option {
 
 type AuthorRow = AuthorInput & { key: string };
 
+const SITE = siteUrl.replace(/\/$/, "");
+
 let keySeq = 0;
 const newKey = () => `a${++keySeq}`;
 const emptyAuthor = (): AuthorRow => ({
@@ -59,6 +63,26 @@ const emptyAuthor = (): AuthorRow => ({
   orcid: "",
   isCorresponding: false,
 });
+
+function formFrom(article: ArticleEditorData | null, defaultIssueId?: string) {
+  return {
+    issueId: article?.issueId ?? defaultIssueId ?? "",
+    categoryId: article?.categoryId ?? "",
+    title: article?.title ?? "",
+    slug: article?.slug ?? "",
+    abstract: article?.abstract ?? "",
+    keywords: (article?.keywords ?? []).join(", "),
+    firstPage: article?.firstPage ?? "",
+    lastPage: article?.lastPage ?? "",
+    doi: article?.doi ?? "",
+    citationStyle: article?.citationStyle ?? ("mla8" as "apa7" | "mla8"),
+    publishedAt: article?.publishedAt ?? "",
+  };
+}
+
+function authorsFrom(article: ArticleEditorData | null): AuthorRow[] {
+  return article?.authors.length ? article.authors.map((a) => ({ ...a, key: newKey() })) : [emptyAuthor()];
+}
 
 export function ArticleEditor({
   article,
@@ -74,24 +98,23 @@ export function ArticleEditor({
   const router = useRouter();
   const isNew = article === null;
   const [version, setVersion] = useState(article?.version ?? 0);
-  const [form, setForm] = useState({
-    issueId: article?.issueId ?? defaultIssueId ?? "",
-    categoryId: article?.categoryId ?? "",
-    title: article?.title ?? "",
-    slug: article?.slug ?? "",
-    abstract: article?.abstract ?? "",
-    keywords: (article?.keywords ?? []).join(", "),
-    firstPage: article?.firstPage ?? "",
-    lastPage: article?.lastPage ?? "",
-    doi: article?.doi ?? "",
-    citationStyle: article?.citationStyle ?? ("mla8" as "apa7" | "mla8"),
-    publishedAt: article?.publishedAt ?? "",
-  });
-  const [authors, setAuthors] = useState<AuthorRow[]>(
-    article?.authors.length ? article.authors.map((a) => ({ ...a, key: newKey() })) : [emptyAuthor()],
-  );
+  const [form, setForm] = useState(() => formFrom(article, defaultIssueId));
+  const [authors, setAuthors] = useState<AuthorRow[]>(() => authorsFrom(article));
   const [slugTouched, setSlugTouched] = useState(!isNew);
   const [dirty, setDirty] = useState(false);
+  // After a save, publish or unpublish the page reloads with the server's
+  // values (item 68: e.g. the publication date set when publishing). Take
+  // them, unless the editor has started typing again: unsaved edits win, and
+  // the server never clears the date of a published article anyway.
+  const [loadedVersion, setLoadedVersion] = useState(article?.version);
+  if (article && article.version !== loadedVersion) {
+    setLoadedVersion(article.version);
+    if (!dirty) {
+      setForm(formFrom(article));
+      setAuthors(authorsFrom(article));
+      setVersion(article.version);
+    }
+  }
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [conflict, setConflict] = useState(false);
   const [confirm, setConfirm] = useState<"unpublish" | "trash" | null>(null);
@@ -181,23 +204,33 @@ export function ArticleEditor({
           <div className="flex flex-wrap items-center gap-3 text-sm">
             {article.deleted ? (
               <Badge variant="muted">In trash</Badge>
+            ) : article.status === "published" && !article.issuePublished ? (
+              <Badge variant="gold">Not live</Badge>
             ) : article.status === "published" ? (
               <Badge variant="green">Published</Badge>
             ) : (
               <Badge variant="gold">Draft</Badge>
             )}
-            {article.status === "published" && !article.issuePublished ? (
+            {article.status === "published" && !article.issuePublished && !article.deleted ? (
               <span className="text-ink-muted">
-                Its issue is still a draft, so it isn&rsquo;t on the site yet.
+                {article.issueInTrash
+                  ? "It's marked as published, but its issue is in the trash, so it isn't on the site."
+                  : "It's marked as published, but its issue is still a draft, so it isn't on the site yet."}
               </span>
             ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="ghost" asChild>
-              <Link href={`/admin/articles/${article.id}/preview`}>
-                <Eye aria-hidden /> Preview
-              </Link>
-            </Button>
+            {dirty ? (
+              <Button variant="ghost" disabled title="Save your changes first">
+                <Eye aria-hidden /> Preview (save your changes first)
+              </Button>
+            ) : (
+              <Button variant="ghost" asChild>
+                <Link href={`/admin/articles/${article.id}/preview`}>
+                  <Eye aria-hidden /> Preview
+                </Link>
+              </Button>
+            )}
             {article.status === "published" && article.issuePublished && !article.deleted ? (
               <Button variant="ghost" asChild>
                 <a href={article.publicPath} target="_blank" rel="noopener noreferrer">
@@ -289,7 +322,7 @@ export function ArticleEditor({
             <FieldError id="a-title-error">{err("title")}</FieldError>
           </div>
           <div className="md:col-span-2">
-            <Label htmlFor="a-slug">URL slug</Label>
+            <Label htmlFor="a-slug">Web address</Label>
             <Input
               id="a-slug"
               value={form.slug}
@@ -301,10 +334,12 @@ export function ArticleEditor({
               aria-invalid={err("slug") ? true : undefined}
               aria-describedby="a-slug-hint a-slug-error"
             />
-            <p id="a-slug-hint" className="mt-1 text-xs text-ink-muted">
-              /articles/{form.slug || "…"}
+            <p id="a-slug-hint" className="mt-1 text-xs break-all text-ink-muted">
+              The last part of the article&rsquo;s address on the site: {SITE}/articles/
+              <strong className="font-semibold text-ink">{form.slug || "…"}</strong>. Use lowercase letters,
+              numbers and hyphens.
               {article?.status === "published"
-                ? " · If you change it, the old address keeps working and redirects here."
+                ? " If you change it, the old address keeps working and redirects here."
                 : ""}
             </p>
             <FieldError id="a-slug-error">{err("slug")}</FieldError>

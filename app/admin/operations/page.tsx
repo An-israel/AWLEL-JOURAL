@@ -15,6 +15,8 @@ import { DeadLetterButtons, RunTaskButton, UnsuppressButton } from "./ops-contro
 export const metadata: Metadata = { title: "Operations" };
 
 const when = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });
+// The runbook lives in the repository; editors can't open files in the code, so link to GitHub (item 88).
+const RUNBOOK_URL = "https://github.com/An-israel/AWLEL-JOURAL/blob/HEAD/docs/RUNBOOK.md";
 
 // What each recorded task is, and how often it should run.
 const TASK_ROWS = [
@@ -87,43 +89,56 @@ async function Content() {
   const env = serverEnv();
   const { now: nowMs, nowIso: now, dayAgoIso: dayAgo } = clock();
 
-  const [snapshot, health, ready, waiting, running, done24h, runs, deadLetters, circuits, suppressions] =
-    await Promise.all([
-      opsSnapshot(),
-      checkDependencies(),
-      supabase
-        .from("jobs")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "queued")
-        .lte("run_at", now),
-      supabase
-        .from("jobs")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "queued")
-        .gt("run_at", now),
-      supabase.from("jobs").select("id", { count: "exact", head: true }).eq("status", "running"),
-      supabase
-        .from("jobs")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "succeeded")
-        .gte("updated_at", dayAgo),
-      supabase
-        .from("cron_runs")
-        .select("task, status, started_at, finished_at, detail, error")
-        .order("started_at", { ascending: false })
-        .limit(300),
-      supabase
-        .from("dead_letter_jobs")
-        .select("id, job_type, payload, attempts, last_error, failed_at")
-        .is("resolved_at", null)
-        .order("failed_at", { ascending: false })
-        .limit(50),
-      supabase.from("circuit_breakers").select("name, failures, opened_until"),
-      supabase
-        .from("email_suppressions")
-        .select("email, reason, created_at")
-        .order("created_at", { ascending: false }),
-    ]);
+  const [
+    snapshot,
+    health,
+    ready,
+    waiting,
+    running,
+    done24h,
+    runs,
+    deadLetters,
+    circuits,
+    suppressions,
+    schemaVersion,
+  ] = await Promise.all([
+    opsSnapshot(),
+    checkDependencies(),
+    supabase
+      .from("jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "queued")
+      .lte("run_at", now),
+    supabase
+      .from("jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "queued")
+      .gt("run_at", now),
+    supabase.from("jobs").select("id", { count: "exact", head: true }).eq("status", "running"),
+    supabase
+      .from("jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "succeeded")
+      .gte("updated_at", dayAgo),
+    supabase
+      .from("cron_runs")
+      .select("task, status, started_at, finished_at, detail, error")
+      .order("started_at", { ascending: false })
+      .limit(300),
+    supabase
+      .from("dead_letter_jobs")
+      .select("id, job_type, payload, attempts, last_error, failed_at")
+      .is("resolved_at", null)
+      .order("failed_at", { ascending: false })
+      .limit(50),
+    supabase.from("circuit_breakers").select("name, failures, opened_until"),
+    supabase
+      .from("email_suppressions")
+      .select("email, reason, created_at")
+      .order("created_at", { ascending: false }),
+    // Moved here from Settings (item 88): only useful when reporting a problem.
+    supabase.rpc("schema_version"),
+  ]);
 
   const alerts = evaluateAlerts(snapshot);
   const lastRun = new Map<string, NonNullable<typeof runs.data>[number]>();
@@ -301,7 +316,7 @@ async function Content() {
                       <p className="mt-1 font-mono text-xs break-all text-coral-ink">{d.last_error}</p>
                     ) : null}
                   </div>
-                  <DeadLetterButtons id={d.id} />
+                  <DeadLetterButtons id={d.id} jobLabel={d.job_type} />
                 </li>
               );
             })}
@@ -365,6 +380,13 @@ async function Content() {
           <p className="mt-2 text-xs text-ink-muted">
             Values are never shown here. Change them in Vercel → Settings → Environment Variables.
           </p>
+          <details className="mt-4 text-sm">
+            <summary className="cursor-pointer font-medium text-navy">Technical details</summary>
+            <p className="mt-2 text-ink-muted">
+              Database version: <code className="text-xs">{schemaVersion.data ?? "unknown"}</code>. Quote this
+              when reporting a problem to whoever looks after the site.
+            </p>
+          </details>
         </Section>
       </div>
     </>
@@ -377,7 +399,15 @@ export default function OperationsPage() {
       <AdminPageHeader
         title="Operations"
         crumbs={[{ label: "Operations" }]}
-        description="Health, background jobs, scheduled tasks and email delivery. The runbook (docs/RUNBOOK.md) says what to do when something here is red."
+        description={
+          <>
+            Health, background jobs, scheduled tasks and email delivery. When something here is red, the{" "}
+            <a href={RUNBOOK_URL} target="_blank" rel="noopener noreferrer">
+              step-by-step guide for problems (opens in a new tab)
+            </a>{" "}
+            says what to do.
+          </>
+        }
       />
       <Suspense fallback={<div className="mt-8 h-96 animate-pulse rounded-lg bg-line" aria-busy="true" />}>
         <Content />

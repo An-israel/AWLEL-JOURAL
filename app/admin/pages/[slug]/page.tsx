@@ -17,10 +17,17 @@ async function Content({ params }: { params: Props["params"] }) {
   const supabase = await createSupabaseServerClient();
   const { data: page } = await supabase
     .from("pages")
-    .select("slug, version, title, meta_description, content, needs_review")
+    .select("id, slug, version, title, meta_description, content, needs_review")
     .eq("slug", slug)
     .maybeSingle();
   if (!page) notFound();
+  // Recent saved versions for the History panel (item 76).
+  const { data: revisions } = await supabase
+    .from("page_revisions")
+    .select("id, title, content, meta_description, saved_at, editor:profiles(full_name)")
+    .eq("page_id", page.id)
+    .order("saved_at", { ascending: false })
+    .limit(30);
   const milestones =
     slug === "department"
       ? ((
@@ -45,6 +52,14 @@ async function Content({ params }: { params: Props["params"] }) {
           content: page.content,
           needsReview: page.needs_review,
         }}
+        revisions={(revisions ?? []).map((r) => ({
+          id: r.id,
+          title: r.title,
+          content: r.content,
+          metaDescription: r.meta_description ?? "",
+          savedAt: r.saved_at,
+          savedBy: r.editor?.full_name || null,
+        }))}
       />
       {milestones ? (
         <MilestonesEditor

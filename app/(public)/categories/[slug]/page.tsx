@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { DEFAULT_OG_IMAGE } from "@/lib/site";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { Suspense } from "react";
 import { ArticleRow } from "@/components/catalog/article-row";
 import { Breadcrumbs } from "@/components/catalog/breadcrumbs";
@@ -17,6 +17,7 @@ import {
   type CategorySort,
 } from "@/lib/data/catalog";
 import { plural } from "@/lib/plural";
+import { findCategoryRedirect } from "@/lib/data/redirects";
 
 type Props = PageProps<"/categories/[slug]">;
 
@@ -171,7 +172,12 @@ export default async function CategoryPage({ params, searchParams }: Props) {
   // Archived subjects still have a page: their articles link to it (item 75).
   const { slug } = await params;
   const category = await getCategory(slug);
-  if (!category) notFound();
+  if (!category) {
+    // A category with a new web address keeps its old one (item 81).
+    const moved = await findCategoryRedirect(slug);
+    if (moved) permanentRedirect(`/categories/${moved}`);
+    notFound();
+  }
 
   return (
     <div className="mx-auto max-w-site px-4 py-8 sm:px-6 lg:px-8">

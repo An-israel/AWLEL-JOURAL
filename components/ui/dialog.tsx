@@ -50,6 +50,7 @@ export function ConfirmDialog({
   description,
   confirmLabel,
   destructive = false,
+  confirmDisabled = false,
   onConfirm,
   open,
   onOpenChange,
@@ -59,6 +60,8 @@ export function ConfirmDialog({
   description: ReactNode;
   confirmLabel: string;
   destructive?: boolean;
+  /** Keeps the confirm button disabled, e.g. until a required box is ticked. */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -77,6 +80,7 @@ export function ConfirmDialog({
             <AD.Cancel className={buttonVariants({ variant: "outline" })}>Cancel</AD.Cancel>
             <AD.Action
               className={buttonVariants({ variant: destructive ? "destructive" : "default" })}
+              disabled={confirmDisabled}
               onClick={onConfirm}
             >
               {confirmLabel}

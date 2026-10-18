@@ -6,6 +6,7 @@ import { MetricsChart } from "@/components/admin/metrics-chart";
 import { AdminPageHeader } from "@/components/admin/page-header";
 import { StatusBadge } from "@/components/submissions/status-badge";
 import { getAnalytics, parseRange, RANGES, type RangeDays } from "@/lib/admin/analytics-data";
+import { describeAction } from "@/lib/admin/audit-labels";
 import { requireRole } from "@/lib/auth";
 import { SUBMISSION_STATUSES, type SubmissionStatus } from "@/lib/submission-status";
 import { ADMIN_AREA_ROLES, isStaff } from "@/lib/roles";
@@ -33,12 +34,15 @@ async function Stats({ searchParams }: { searchParams: Props["searchParams"] }) 
           .eq("status", "published")
           .is("deleted_at", null),
       ),
+      // Live on the site: the article and its issue both published, neither in the trash (item 80).
       count(
         supabase
           .from("articles")
-          .select("id", { count: "exact", head: true })
+          .select("id, issue:issues!inner(id)", { count: "exact", head: true })
           .eq("status", "published")
-          .is("deleted_at", null),
+          .is("deleted_at", null)
+          .eq("issue.status", "published")
+          .is("issue.deleted_at", null),
       ),
       count(
         supabase
@@ -84,7 +88,7 @@ async function Stats({ searchParams }: { searchParams: Props["searchParams"] }) 
 
   const cards = [
     { label: "Published issues", value: issues },
-    { label: "Published articles", value: articles },
+    { label: "Articles on the site", value: articles },
     { label: "Draft articles", value: drafts },
     { label: "Open submissions", value: submissions },
     { label: "Pending reviews", value: pendingReviews },
@@ -181,7 +185,7 @@ async function Stats({ searchParams }: { searchParams: Props["searchParams"] }) 
                 <li key={a.id} className="flex flex-wrap justify-between gap-2 px-4 py-3 text-sm">
                   <span>
                     <strong className="font-semibold">{a.actor?.full_name ?? "System"}</strong>{" "}
-                    {a.action.replace(/_/g, " ")} · {a.entity_type.replace(/_/g, " ")}
+                    {describeAction(a.action, a.entity_type)}
                   </span>
                   <time className="text-ink-muted" dateTime={a.created_at}>
                     {dateTime.format(new Date(a.created_at))}

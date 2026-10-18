@@ -13,9 +13,9 @@ const SUPER = ["super_admin"] as const;
 const pageSchema = z.object({
   slug: z.string().regex(/^[a-z0-9-]+$/),
   expectedVersion: z.number().int(),
-  title: z.string().trim().min(2, "Enter a title.").max(200),
+  title: z.string().trim().min(2, "Enter a title.").max(200, "Keep the title under 200 characters."),
   metaDescription: z.string().trim().max(300, "Keep it under 300 characters.").optional(),
-  content: z.string().max(300_000),
+  content: z.string().max(300_000, "The page is too long to save."),
   needsReview: z.boolean(),
 });
 
@@ -51,9 +51,9 @@ export async function savePage(
 const milestoneSchema = z.object({
   id: z.uuid().optional(),
   expectedVersion: z.number().int().optional(),
-  yearLabel: z.string().trim().min(1, "Enter a year or period.").max(40),
-  title: z.string().trim().min(2, "Enter a title.").max(200),
-  description: z.string().trim().max(1000).optional(),
+  yearLabel: z.string().trim().min(1, "Enter a year or period.").max(40, "Keep it under 40 characters."),
+  title: z.string().trim().min(2, "Enter a title.").max(200, "Keep the title under 200 characters."),
+  description: z.string().trim().max(1000, "Keep the description under 1,000 characters.").optional(),
   needsVerification: z.boolean(),
 });
 

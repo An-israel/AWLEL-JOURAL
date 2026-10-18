@@ -24,6 +24,8 @@ export interface ExistingArticle {
   categoryId: string | null;
   citationStyle: "apa7" | "mla8";
   authors: string[];
+  hasPdf: boolean;
+  hasDocx: boolean;
 }
 
 interface Row {
@@ -41,6 +43,8 @@ interface Row {
   citationStyle: "apa7" | "mla8";
   pdfFileName?: string;
   docxFileName?: string;
+  /** Files the article already has: uploading another replaces it (item 77). */
+  hasFile: Record<QueuedFile["slot"], boolean>;
   state: "ready" | "creating" | "created" | "error";
   error?: string;
 }
@@ -56,6 +60,12 @@ interface QueuedFile {
 }
 
 const PARALLEL_UPLOADS = 3; // backpressure (item 44)
+const STYLE_HINT =
+  "Referencing style: the style of the article's reference list, MLA (Works Cited) or APA (References).";
+const SLOT_NAME = { article_pdf: "PDF", article_docx: "Word file" } as const;
+// On phones each row becomes a card, so every field needs a visible label (item 82).
+const CARD_LABEL = "mb-1 block text-xs font-medium text-ink-muted md:hidden";
+const CELL = "block md:table-cell md:px-3 md:py-2";
 let seq = 0;
 const nextKey = (p: string) => `${p}${++seq}`;
 
@@ -91,12 +101,14 @@ export function BulkUploader({
       keywords: "",
       abstract: "",
       citationStyle: a.citationStyle,
+      hasFile: { article_pdf: a.hasPdf, article_docx: a.hasDocx },
       state: "created",
     })),
   );
   const [files, setFiles] = useState<QueuedFile[]>([]);
   const [running, setRunning] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [replaceOk, setReplaceOk] = useState(false);
   const csvInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const work = rows.some((r) => !r.articleId) || files.some((f) => f.status !== "done");
@@ -129,6 +141,7 @@ export function BulkUploader({
       keywords: "",
       abstract: "",
       citationStyle: "mla8",
+      hasFile: { article_pdf: false, article_docx: false },
       state: "ready",
     };
   }
@@ -198,6 +211,8 @@ export function BulkUploader({
       categoryId: row.categoryId,
       title: row.title,
       slug: slugify(row.title),
+      // Two articles may share a title: the second gets "-2" (item 72).
+      autoSlug: true,
       abstract: row.abstract
         ? `<p>${row.abstract
             .replace(/&/g, "&amp;")
@@ -234,6 +249,8 @@ export function BulkUploader({
       return void toast.error(
         `Choose an article for ${unmatched.length} unmatched file${unmatched.length === 1 ? "" : "s"} first.`,
       );
+    if (replacing.length && !replaceOk)
+      return void toast.error("Tick the box to confirm replacing the current files first.");
     setRunning(true);
 
     // 1. Create the new articles one at a time (each is a small transaction).
@@ -270,6 +287,9 @@ export function BulkUploader({
           if (r.ok && r.data) {
             target.version = r.data.version;
             patchFile(f.id, { status: "done", progress: 1 });
+            setRows((list) =>
+              list.map((x) => (x.key === rowKey ? { ...x, hasFile: { ...x.hasFile, [f.slot]: true } } : x)),
+            );
           } else {
             failed++;
             patchFile(f.id, { status: "error", message: r.ok ? "Upload failed" : r.message });
@@ -289,6 +309,9 @@ export function BulkUploader({
 
   const pendingRows = rows.filter((r) => !r.articleId && r.title.trim()).length;
   const pendingFiles = files.filter((f) => f.status !== "done").length;
+  const replaces = (f: QueuedFile) =>
+    f.status !== "done" && Boolean(rows.find((r) => r.key === f.rowKey)?.hasFile[f.slot]);
+  const replacing = files.filter(replaces);
 
   return (
     <div className="mt-6 space-y-8">
@@ -341,32 +364,42 @@ export function BulkUploader({
         </div>
         <p className="text-xs text-ink-muted">
           CSV columns: {CSV_COLUMNS.join(", ")}. Separate several authors (and their affiliations) with
-          semicolons.
+          semicolons. {STYLE_HINT}
         </p>
         {rows.length === 0 ? (
           <p className="rounded-lg border border-dashed border-line bg-white p-6 text-center text-sm text-ink-muted">
             No articles yet.
           </p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-line bg-white">
-            <table className="w-full min-w-[56rem] text-sm">
-              <thead className="border-b border-line bg-paper/70 text-left text-xs tracking-wide text-ink-muted uppercase">
+          <div className="rounded-lg border border-line bg-white md:overflow-x-auto">
+            <table className="block w-full text-sm md:table md:min-w-[56rem]">
+              <thead className="hidden border-b border-line bg-paper/70 text-left text-xs tracking-wide text-ink-muted uppercase md:table-header-group">
                 <tr>
                   <th className="px-3 py-2">Title</th>
                   <th className="px-3 py-2">Authors (; separated)</th>
                   <th className="px-3 py-2">Category</th>
                   <th className="w-36 px-3 py-2">Pages</th>
-                  <th className="px-3 py-2">Style</th>
+                  <th className="px-3 py-2">
+                    <abbr title={STYLE_HINT} className="no-underline">
+                      Referencing style
+                    </abbr>
+                  </th>
                   <th className="w-28 px-3 py-2">Status</th>
                   <th className="w-10" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-line">
+              <tbody className="block divide-y divide-line md:table-row-group">
                 {rows.map((r) => {
                   const locked = Boolean(r.articleId) || running;
                   return (
-                    <tr key={r.key} className="align-top">
-                      <td className="px-3 py-2">
+                    <tr
+                      key={r.key}
+                      className="relative grid gap-3 p-4 align-top sm:grid-cols-2 md:table-row md:p-0"
+                    >
+                      <td className={cn(CELL, "sm:col-span-2")}>
+                        <span aria-hidden className={CARD_LABEL}>
+                          Title
+                        </span>
                         <Input
                           aria-label="Title"
                           value={r.title}
@@ -376,7 +409,10 @@ export function BulkUploader({
                         />
                         {r.error ? <p className="mt-1 text-xs text-coral-ink">{r.error}</p> : null}
                       </td>
-                      <td className="px-3 py-2">
+                      <td className={cn(CELL, "sm:col-span-2")}>
+                        <span aria-hidden className={CARD_LABEL}>
+                          Authors (separate with ;)
+                        </span>
                         <Input
                           aria-label="Authors"
                           value={r.authors}
@@ -385,7 +421,10 @@ export function BulkUploader({
                           className="h-9"
                         />
                       </td>
-                      <td className="px-3 py-2">
+                      <td className={CELL}>
+                        <span aria-hidden className={CARD_LABEL}>
+                          Category
+                        </span>
                         <NativeSelect
                           aria-label="Category"
                           value={r.categoryId}
@@ -401,7 +440,10 @@ export function BulkUploader({
                           ))}
                         </NativeSelect>
                       </td>
-                      <td className="px-3 py-2">
+                      <td className={CELL}>
+                        <span aria-hidden className={CARD_LABEL}>
+                          First and last page
+                        </span>
                         <div className="flex gap-1">
                           <Input
                             aria-label="First page"
@@ -421,21 +463,28 @@ export function BulkUploader({
                           />
                         </div>
                       </td>
-                      <td className="px-3 py-2">
+                      <td className={CELL}>
+                        <span aria-hidden className={CARD_LABEL}>
+                          Referencing style
+                        </span>
                         <NativeSelect
-                          aria-label="Citation style"
+                          aria-label="Referencing style"
+                          title={STYLE_HINT}
                           value={r.citationStyle}
                           disabled={locked}
                           onChange={(e) =>
                             patchRow(r.key, { citationStyle: e.target.value as "apa7" | "mla8" })
                           }
-                          className="h-9 w-24"
+                          className="h-9 md:w-44"
                         >
-                          <option value="mla8">MLA</option>
-                          <option value="apa7">APA</option>
+                          <option value="mla8">MLA (Works Cited)</option>
+                          <option value="apa7">APA (References)</option>
                         </NativeSelect>
                       </td>
-                      <td className="px-3 py-2 text-xs">
+                      <td className={cn(CELL, "text-xs")}>
+                        <span aria-hidden className={CARD_LABEL}>
+                          Status
+                        </span>
                         {r.articleId ? (
                           <Link href={`/admin/articles/${r.articleId}`} className="font-medium">
                             {r.state === "created" && !existing.some((e) => e.id === r.articleId)
@@ -450,7 +499,7 @@ export function BulkUploader({
                           <span className="text-ink-muted">New</span>
                         )}
                       </td>
-                      <td className="px-1 py-2">
+                      <td className="absolute top-2 right-2 md:static md:table-cell md:px-1 md:py-2">
                         {!r.articleId ? (
                           <button
                             type="button"
@@ -579,6 +628,11 @@ export function BulkUploader({
                     <span className="flex items-center gap-1.5 text-ink-muted">
                       <Loader2 aria-hidden className="size-4 animate-spin" /> Waiting
                     </span>
+                  ) : replaces(f) ? (
+                    <span className="flex items-center gap-1.5 text-[#7A4F18]">
+                      <CircleAlert aria-hidden className="size-4" /> Will replace the current{" "}
+                      {SLOT_NAME[f.slot]}
+                    </span>
                   ) : (
                     <span className="text-ink-muted">{f.rowKey ? "Matched" : "Not matched"}</span>
                   )}
@@ -602,7 +656,25 @@ export function BulkUploader({
       </section>
 
       <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center gap-3 border-t border-line bg-paper/95 px-4 py-3 backdrop-blur sm:-mx-8 sm:px-8 lg:-mx-10 lg:px-10">
-        <Button onClick={start} disabled={running || (pendingRows === 0 && pendingFiles === 0)}>
+        {replacing.length > 0 ? (
+          <label className="flex w-full items-center gap-2 text-sm text-[#7A4F18]">
+            <input
+              type="checkbox"
+              checked={replaceOk}
+              disabled={running}
+              onChange={(e) => setReplaceOk(e.target.checked)}
+            />
+            Replace the current {replacing.length === 1 ? "file" : `${replacing.length} files`} of existing
+            articles (the old {replacing.length === 1 ? "one is" : "ones are"} kept in each article&rsquo;s
+            file history)
+          </label>
+        ) : null}
+        <Button
+          onClick={start}
+          disabled={
+            running || (pendingRows === 0 && pendingFiles === 0) || (replacing.length > 0 && !replaceOk)
+          }
+        >
           {running ? "Working…" : "Start"}
         </Button>
         <span className="text-sm text-ink-muted">

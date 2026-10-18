@@ -17,7 +17,7 @@ import {
   Redo2,
   Undo2,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 function ToolButton({
@@ -181,6 +181,15 @@ export function RichTextEditor({
     },
     onUpdate: ({ editor: e }) => onChange(e.isEmpty ? "" : e.getHTML()),
   });
+
+  // Follow a value set from outside the editor: a restored page version, or
+  // the saved text after a reload (items 68, 76). Typing never gets here,
+  // because onChange has already made the two the same.
+  useEffect(() => {
+    if (!editor) return;
+    const current = editor.isEmpty ? "" : editor.getHTML();
+    if (value !== current) editor.commands.setContent(value, { emitUpdate: false });
+  }, [editor, value]);
 
   return (
     <div

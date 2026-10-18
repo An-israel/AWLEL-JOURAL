@@ -17,7 +17,7 @@ type Props = PageProps<"/admin/issues/[id]">;
 
 async function Content({ params }: { params: Props["params"] }) {
   const { id } = await params;
-  await requireRole(STAFF_ROLES, `/admin/issues/${id}`);
+  const user = await requireRole(STAFF_ROLES, `/admin/issues/${id}`);
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const supabase = await createSupabaseServerClient();
   const [{ data: issue }, all, { data: articles }] = await Promise.all([
@@ -34,13 +34,13 @@ async function Content({ params }: { params: Props["params"] }) {
     loadAdminIssues(),
     supabase
       .from("articles")
-      .select("id, title, status, first_page, last_page")
+      .select("id, title, status, first_page, last_page, pdf_file_id, deleted_at")
       .eq("issue_id", id)
-      .is("deleted_at", null)
       .order("sort_order"),
   ]);
   if (!issue) notFound();
   const meta = all.find((i) => i.id === id)!;
+  const live = (articles ?? []).filter((a) => !a.deleted_at);
 
   return (
     <>
@@ -55,6 +55,7 @@ async function Content({ params }: { params: Props["params"] }) {
           version: issue.version,
           label: meta.label,
           publicPath: issuePath(meta.volumeNumber, meta.issueNumber),
+          volumeNumber: meta.volumeNumber,
           status: issue.status,
           deleted: Boolean(issue.deleted_at),
           issueNumber: issue.issue_number,
@@ -69,12 +70,15 @@ async function Content({ params }: { params: Props["params"] }) {
             issue_pdf: toAttached(issue.pdf),
             issue_docx: toAttached(issue.docx),
           },
-          articles: (articles ?? []).map((a) => ({
+          articles: live.map((a) => ({
             id: a.id,
             title: a.title,
             status: a.status,
             pages: pageRange(a.first_page, a.last_page) ?? "",
+            hasPdf: Boolean(a.pdf_file_id),
           })),
+          trashedArticles: (articles ?? []).length - live.length,
+          canDeleteForever: user.role === "super_admin",
         }}
       />
     </>

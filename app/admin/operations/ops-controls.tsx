@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/toaster";
 import type { ActionResult } from "@/lib/admin/result";
 import { removeSuppression, resolveDeadLetter, runTaskNow } from "./actions";
@@ -29,8 +30,9 @@ export function RunTaskButton({ task, label }: { task: string; label: string }) 
   );
 }
 
-export function DeadLetterButtons({ id }: { id: number }) {
+export function DeadLetterButtons({ id, jobLabel }: { id: number; jobLabel?: string }) {
   const { pending, run } = useAction();
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   return (
     <span className="flex gap-1.5">
       <Button
@@ -41,14 +43,18 @@ export function DeadLetterButtons({ id }: { id: number }) {
       >
         Retry
       </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        disabled={pending}
-        onClick={() => run(() => resolveDeadLetter(id, "discarded"))}
-      >
+      <Button size="sm" variant="ghost" disabled={pending} onClick={() => setConfirmDiscard(true)}>
         Discard
       </Button>
+      <ConfirmDialog
+        open={confirmDiscard}
+        onOpenChange={setConfirmDiscard}
+        title="Discard this failed job?"
+        description={`${jobLabel ? `The job “${jobLabel}”` : "The job"} won't be tried again, so whatever it was doing (for example sending an email) will not happen. Use Retry instead if it should still run. This can't be undone.`}
+        confirmLabel="Discard"
+        destructive
+        onConfirm={() => run(() => resolveDeadLetter(id, "discarded"))}
+      />
     </span>
   );
 }
