@@ -15,6 +15,7 @@ import {
 import { getFeatureFlags } from "@/lib/data/feature-flags";
 import { getSiteSettings } from "@/lib/data/site-settings";
 import { siteUrl } from "@/lib/env.public";
+import { plural } from "@/lib/plural";
 import { periodicalLd } from "@/lib/seo/json-ld";
 
 export const metadata: Metadata = {
@@ -34,7 +35,13 @@ export default async function HomePage() {
     flags.home_most_read ? getPopularArticles("views") : Promise.resolve([]),
     flags.home_most_read ? getPopularArticles("downloads") : Promise.resolve([]),
   ]);
+  // Rankings mean nothing until someone has read something (item 27).
+  const showMostRead = mostRead.some((a) => a.viewCount > 0);
   const showDownloads = mostDownloaded.some((a) => a.downloadCount > 0);
+  // Subjects with nothing published yet stay on the Scope page only.
+  const subjects = categories.filter((c) => c.articleCount > 0);
+  // "Open access" is claimed only once the licence is confirmed in Settings (item 41).
+  const badges = [`ISSN ${settings.issn}`, settings.licence ? "Open access" : null, "Peer reviewed"];
 
   return (
     <>
@@ -75,9 +82,7 @@ export default async function HomePage() {
               in global English language and literary studies, published since 2001 by the{" "}
               {settings.publisher}.
             </p>
-            <p className="mt-4 text-sm font-medium text-ink-muted">
-              ISSN {settings.issn} · Open access · Peer reviewed
-            </p>
+            <p className="mt-4 text-sm font-medium text-ink-muted">{badges.filter(Boolean).join(" · ")}</p>
             <div className="mt-9 flex flex-wrap gap-3">
               <Link
                 href={latest?.path ?? "/issues"}
@@ -132,18 +137,22 @@ export default async function HomePage() {
 
       {/* Categories ------------------------------------------------------ */}
       <section className="mx-auto max-w-site px-4 pt-20 sm:px-6 lg:px-8" aria-labelledby="categories-title">
-        <SectionHeading id="categories-title" eyebrow="Subject areas" title="Browse by category" />
-        <ul className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line md:grid-cols-3 lg:grid-cols-5">
-          {categories.map((category) => (
-            <li key={category.id} className="bg-white">
+        <SectionHeading
+          id="categories-title"
+          eyebrow="Subject areas"
+          title="Browse by category"
+          action={{ href: "/categories", label: "See all subjects" }}
+        />
+        {/* Separate cards, so a short last row leaves no grey gap. */}
+        <ul className="mt-8 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+          {subjects.map((category) => (
+            <li key={category.id} className="overflow-hidden rounded-lg border border-line bg-white">
               <Link
                 href={`/categories/${category.slug}`}
                 className="group flex h-full flex-col justify-between gap-3 p-4 no-underline transition-colors hover:bg-paper sm:p-5"
               >
                 <span className="font-semibold text-ink group-hover:text-navy">{category.name}</span>
-                <span className="text-sm text-ink-muted">
-                  {category.articleCount} {category.articleCount === 1 ? "article" : "articles"}
-                </span>
+                <span className="text-sm text-ink-muted">{plural(category.articleCount, "article")}</span>
               </Link>
             </li>
           ))}
@@ -151,7 +160,7 @@ export default async function HomePage() {
       </section>
 
       {/* Most read / downloaded ------------------------------------------ */}
-      {mostRead.length > 0 ? (
+      {showMostRead ? (
         <section className="mx-auto max-w-site px-4 pt-20 sm:px-6 lg:px-8" aria-labelledby="popular-title">
           <h2 id="popular-title" className="sr-only">
             Popular articles
@@ -282,12 +291,7 @@ function PopularList({
                 </Link>
                 <p className="mt-1 text-sm text-ink-muted">
                   {authorLine(article.authors)}
-                  {count > 0 ? (
-                    <>
-                      {" "}
-                      · {count.toLocaleString("en")} {metric}
-                    </>
-                  ) : null}
+                  {count > 0 ? <> · {plural(count, metric === "views" ? "view" : "download")}</> : null}
                 </p>
               </div>
             </li>
