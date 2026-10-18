@@ -73,21 +73,30 @@ command-line alternative.
    npx supabase db push          # migrations: tables, RLS policies, storage buckets and policies
    ```
 
-   After the first push, new migrations are applied automatically, either by the Supabase GitHub
-   integration (set its production branch to the branch Vercel deploys) or by
-   `.github/workflows/migrate.yml` on pushes to `main` (needs the `SUPABASE_ACCESS_TOKEN`,
-   `SUPABASE_PROJECT_REF` and `SUPABASE_DB_PASSWORD` repository secrets). Use one of the two, not both. If
-   your production branch isn't `main`, change the branch name in `migrate.yml` and `ci.yml`.
+   Nothing applies later migrations to production automatically. After adding a migration, regenerate
+   `production-setup.sql` (`scripts/build-setup-sql.sh`; CI checks it is current) and, once merged, paste it
+   into the SQL editor again (it applies only what is missing), or run `npx supabase db push`. The Supabase
+   GitHub integration can do this on every push instead (see the end of “Deploying to Vercel”).
 
 3. Seed reference data once: run the contents of `supabase/seed.sql` in the SQL editor. It is idempotent.
    Skip the "SAMPLE CONTENT" section if you don't want the sample issue in production.
-4. **Auth → URL configuration:** set _Site URL_ to `https://awlel.unn.edu.ng` and add
-   `https://awlel.unn.edu.ng/auth/callback` and `https://*.vercel.app/auth/callback` to the redirect URLs.
+4. **Auth → URL configuration:** set _Site URL_ to the production address exactly (for example
+   `https://awlel.unn.edu.ng`, no trailing slash) and add only exact callback addresses to the redirect URLs:
+   the production one (`https://awlel.unn.edu.ng/auth/callback`) and, until the domain is live, the Vercel
+   production address's. **Never add `https://*.vercel.app/auth/callback`:** anyone can deploy to a
+   `vercel.app` subdomain, so the wildcard would let a stranger's site receive password-reset links. Even a
+   project-name pattern (`https://awlel-joural-*-<team>.vercel.app/…`) can be matched by another account's
+   project name, so add a specific preview's exact branch address only while you need sign-in on it.
 5. **Auth → Providers:** keep _Email_ enabled with **Confirm email** switched on (local development has it off).
    Optionally enable _Google_, then turn on the `google_sign_in` feature flag.
-   **Auth → Email templates:** keep the default links; they all return through `/auth/callback`.
-6. **Auth → SMTP:** use Resend's SMTP credentials so sign-up and password emails come from the journal's
-   domain.
+   **Auth → Emails → Templates:** replace the templates with the ones in `docs/LAUNCH_GUIDE.md`, step 6. They
+   link to `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=…&next=…`, which works on any device.
+   The default links don't: invitations (sent with the service role, so without PKCE) put the session in the
+   URL fragment, which the server-side callback never sees, and PKCE confirmation and reset links only work in
+   the browser that asked for them.
+6. **Auth → SMTP (required):** use Resend's SMTP credentials. Supabase's built-in email sends only to members
+   of the Supabase organisation, about 2 an hour, so without this nobody else gets a sign-up confirmation.
+   Then raise **Auth → Rate Limits** → emails to about 100 an hour.
 7. Storage buckets (`issue-covers`, `site-assets`, `published-files`, `submissions`) and their policies are
    created by the migrations; there is nothing to click.
 
@@ -117,11 +126,13 @@ demote or deactivate the last active Super Admin.
 2. Connect Supabase through the **Supabase for Vercel** integration, or add the variables from
    `.env.example` by hand. The app accepts the integration's names (`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`,
    `SUPABASE_SECRET_KEY`, `SUPABASE_JWT_SECRET`) as well as the ones in `.env.example`.
-3. Also add `METRICS_SALT` and `CRON_SECRET` (`openssl rand -hex 24`), `NEXT_PUBLIC_SITE_URL`, and the email
-   settings once your sending domain is ready.
-4. Choose a Function Region close to the Supabase region (Project → Settings → Functions).
-5. **Set up the database before the site has content** (see "Supabase setup" above: `supabase db push`, then
-   run `supabase/seed.sql` once in the SQL editor). Until then the site deploys and shows empty pages; they
+3. Also add `METRICS_SALT` and `CRON_SECRET` (`openssl rand -hex 24`, or any long random text),
+   `NEXT_PUBLIC_SITE_URL`, and the email settings once your sending domain is ready: `RESEND_API_KEY` and
+   `EMAIL_FROM` together, since email is sent only when both are set (until then it waits in the job queue).
+4. Choose a Function Region close to the Supabase region (Project → Settings → Functions; `docs/LAUNCH_GUIDE.md`,
+   step 4).
+5. **Set up the database before the site has content** (see "Supabase setup" above: `production-setup.sql`, or
+   `supabase db push` and then `supabase/seed.sql` once in the SQL editor). Until then the site deploys and shows empty pages; they
    fill in within a few minutes of the schema appearing, or straight away on the next deploy.
 6. Every pull request gets a preview deployment; merging to the production branch deploys production. Roll
    back instantly from **Deployments → ⋯ → Promote to Production** on an earlier deployment.
@@ -137,9 +148,11 @@ push to that branch (it does not run `seed.sql` on production; do that once by h
 
 Step by step, for a domain bought from any registrar (website records and the email records for Resend):
 [`docs/DOMAIN_SETUP.md`](docs/DOMAIN_SETUP.md). In short: add the domain in Vercel → **Settings → Domains**,
-create the A and CNAME records Vercel shows at your registrar, then set `NEXT_PUBLIC_SITE_URL`, update
-Supabase → Auth → URL configuration, and redeploy. For email, add the domain in Resend and create its SPF,
-DKIM and DMARC records, then set `RESEND_API_KEY` and `EMAIL_FROM`.
+create the A and CNAME records Vercel shows at your registrar, then set `NEXT_PUBLIC_SITE_URL` and the GitHub
+`SITE_URL` secret to the exact primary address (not the one that redirects to it: the workflows fail on a
+redirect), update Supabase → Auth → URL configuration, and redeploy. For email, add the domain in Resend and
+create its SPF, DKIM and DMARC records, then set `RESEND_API_KEY` and `EMAIL_FROM`, and switch Supabase to
+custom SMTP.
 
 ## Editor's guide: publishing an issue
 
