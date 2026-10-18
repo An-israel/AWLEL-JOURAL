@@ -1,5 +1,6 @@
 import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
+import { hasPlaceholder, stripPlaceholders } from "@/lib/sanitize";
 import { logger } from "@/lib/server/logger";
 import { publicStorageUrl } from "@/lib/storage";
 import { createSupabasePublicClient } from "@/lib/supabase/public";
@@ -16,7 +17,11 @@ export interface StaticPage {
   updatedAt: string;
 }
 
-/** Editable static page content (edited in Admin → Pages). */
+/**
+ * Editable static page content (edited in Admin → Pages). Placeholder text
+ * still waiting for confirmed wording is left out (item 19); the admin
+ * editor reads the table directly, so editors still see it.
+ */
 export async function getPage(slug: StaticPageSlug): Promise<StaticPage | null> {
   "use cache";
   cacheTag(TAGS.pages, TAGS.page(slug));
@@ -36,8 +41,8 @@ export async function getPage(slug: StaticPageSlug): Promise<StaticPage | null> 
     ? {
         slug: data.slug,
         title: data.title,
-        content: data.content,
-        metaDescription: data.meta_description,
+        content: stripPlaceholders(data.content),
+        metaDescription: hasPlaceholder(data.meta_description) ? null : data.meta_description,
         updatedAt: data.updated_at,
       }
     : null;
@@ -107,6 +112,10 @@ export interface Milestone {
   description: string | null;
 }
 
+/**
+ * Confirmed milestones only. Entries still ticked "Needs verification" in the
+ * admin, or still holding "[Year]"-style placeholders, stay off the public site.
+ */
 export async function getDepartmentMilestones(): Promise<Milestone[]> {
   "use cache";
   cacheTag(TAG_DEPARTMENT_TIMELINE);
@@ -114,10 +123,13 @@ export async function getDepartmentMilestones(): Promise<Milestone[]> {
   const { data, error } = await createSupabasePublicClient()
     .from("department_milestones")
     .select("id, year_label, title, description")
+    .eq("needs_verification", false)
     .order("sort_order");
   if (error) {
     logger.error({ err: error }, "department timeline unavailable");
     return [];
   }
-  return data.map((m) => ({ id: m.id, yearLabel: m.year_label, title: m.title, description: m.description }));
+  return data
+    .filter((m) => ![m.year_label, m.title, m.description].some(hasPlaceholder))
+    .map((m) => ({ id: m.id, yearLabel: m.year_label, title: m.title, description: m.description }));
 }
