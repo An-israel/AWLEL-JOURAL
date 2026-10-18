@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { serverEnv } from "@/lib/env.server";
+import { plural } from "@/lib/plural";
 import { enqueueJob, runJobNow } from "@/lib/server/jobs";
 import { logger } from "@/lib/server/logger";
 import { checkRateLimit, clientIp, RATE_LIMITS } from "@/lib/server/rate-limit";
@@ -13,7 +14,8 @@ const MIN_FILL_MS = 3_000;
 /**
  * Contact form (section 5.11). Spam defences: a hidden honeypot field, a
  * minimum fill time, and a per-IP rate limit. Messages are stored, then an
- * email to the editorial office is queued and attempted immediately.
+ * email to the editorial office is queued and attempted immediately. Only a
+ * filled honeypot gets a pretend success; every other refusal says so.
  */
 export async function submitContact(_prev: ContactState, formData: FormData): Promise<ContactState> {
   const raw = {
@@ -23,12 +25,26 @@ export async function submitContact(_prev: ContactState, formData: FormData): Pr
     message: String(formData.get("message") ?? ""),
   };
 
-  // Bots fill every field and submit instantly. Pretend success so they learn nothing.
+  // Only bots fill the hidden honeypot field. Pretend success so they learn nothing.
   const honeypot = String(formData.get("website") ?? "");
-  const startedAt = Number(formData.get("started_at") ?? 0);
-  if (honeypot || !startedAt || Date.now() - startedAt < MIN_FILL_MS) {
-    logger.info({ honeypot: Boolean(honeypot) }, "contact form: spam heuristics triggered");
+  if (honeypot) {
+    logger.info({ honeypot: true }, "contact form: spam heuristics triggered");
     return { status: "success" };
+  }
+
+  // Bots also submit instantly. A person can trip this too (a missing timer
+  // after a page glitch, or a very quick resend), so never pretend success
+  // here: ask them to send again, keeping what they typed.
+  const startedAt = Number(formData.get("started_at") ?? 0);
+  const timerOk = Number.isFinite(startedAt) && startedAt > 0;
+  if (!timerOk || Date.now() - startedAt < MIN_FILL_MS) {
+    logger.info({ honeypot: false, timer: timerOk }, "contact form: sent too quickly; asked to resend");
+    return {
+      status: "error",
+      message: "Sorry, your message was not sent. Please check it and press Send message again.",
+      values: raw,
+      startedAt: timerOk ? startedAt : undefined,
+    };
   }
 
   const parsed = contactSchema.safeParse(raw);
@@ -38,15 +54,22 @@ export async function submitContact(_prev: ContactState, formData: FormData): Pr
       const key = issue.path[0] as keyof ContactFields;
       fieldErrors[key] ??= issue.message;
     }
-    return { status: "error", message: "Please correct the highlighted fields.", fieldErrors, values: raw };
+    return {
+      status: "error",
+      message: "Please correct the highlighted fields.",
+      fieldErrors,
+      values: raw,
+      startedAt,
+    };
   }
 
   const limit = await checkRateLimit(RATE_LIMITS.contact, clientIp(await headers()));
   if (!limit.allowed) {
     return {
       status: "error",
-      message: `You have sent several messages recently. Please try again in about ${Math.ceil(limit.retryAfterSeconds / 60)} minutes.`,
+      message: `You have sent several messages recently. Please try again in about ${plural(Math.ceil(limit.retryAfterSeconds / 60), "minute")}.`,
       values: raw,
+      startedAt,
     };
   }
 
@@ -58,6 +81,7 @@ export async function submitContact(_prev: ContactState, formData: FormData): Pr
       status: "error",
       message: "Sorry, your message could not be sent. Please try again, or email us directly.",
       values: raw,
+      startedAt,
     };
   }
 

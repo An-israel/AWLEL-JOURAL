@@ -18,4 +18,6 @@ export interface ContactState {
   message?: string;
   fieldErrors?: Partial<Record<keyof ContactFields, string>>;
   values?: Partial<ContactFields>;
+  /** When the visitor opened the form, carried across failed attempts (bot time-trap). */
+  startedAt?: number;
 }
