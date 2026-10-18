@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { LeaveGuardDialog } from "@/components/admin/leave-guard";
 import { LiveNotices } from "@/components/admin/live-notices";
 import { AdminSidebar } from "@/components/admin/sidebar";
 import { SkipLink } from "@/components/site/skip-link";
@@ -24,6 +25,7 @@ async function Shell({ children }: { children: React.ReactNode }) {
       </main>
       {/* Inside the dynamic boundary: sonner reads the clock while rendering. */}
       <Toaster />
+      <LeaveGuardDialog />
       {isStaff(user.role) ? <LiveNotices /> : null}
     </div>
   );

@@ -44,7 +44,10 @@ export async function saveArticle(
         last_page: a.lastPage ?? "",
         doi: a.doi,
         citation_style: a.citationStyle,
+        // Empty never clears the date of a published article (save_article, item 68).
         published_at: a.publishedAt ? `${a.publishedAt}T09:00:00Z` : "",
+        // Bulk upload: add -2, -3 ... when the address is taken (item 72).
+        auto_slug: a.autoSlug ?? false,
       },
       p_authors: a.authors.map((x) => ({
         full_name: x.fullName,

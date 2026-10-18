@@ -34,7 +34,7 @@ export function fromDbError(
       return {
         ok: false,
         message: /slug/.test(error.message)
-          ? "That URL slug is already used. Choose another."
+          ? "That web address is already used (perhaps by something in the trash). Choose another."
           : `This ${subject} already exists.`,
         fieldErrors: /slug/.test(error.message) ? { slug: "Already in use" } : undefined,
       };
