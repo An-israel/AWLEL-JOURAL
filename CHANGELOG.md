@@ -67,7 +67,7 @@ All notable changes to this project are documented here. The project follows
 - Live notices for editors (Supabase Realtime): new submissions, revisions, reviews and messages appear as
   they happen.
 - Weekly backups (GitHub Actions): database dump with the list of stored files, plus every stored file
-  monthly, copied to the journal's Google Drive and kept as workflow artifacts; restore scripts; a restore
+  monthly, copied to the journal's Google Drive; restore scripts; a restore
   drill passed.
 - Public read-only JSON API at `/api/v1` (issues, articles with citations, categories), CORS-enabled and
   CDN-cached.
