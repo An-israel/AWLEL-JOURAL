@@ -81,9 +81,17 @@ test("a job that can't succeed is dead-lettered and can be discarded", async ({ 
 
   await signInAndWait(page, SUPER_ADMIN.email, SUPER_ADMIN.password);
   await page.goto("/admin/operations");
+  await expect(page.getByRole("link", { name: /step-by-step guide/ })).toHaveAttribute(
+    "href",
+    /github\.com\/.*\/docs\/RUNBOOK\.md$/,
+  );
   await expect(page.getByRole("status").first()).toContainText("failed for good");
   const row = page.getByRole("listitem").filter({ hasText: "No handler for job type test.unknown" });
   await row.getByRole("button", { name: "Discard" }).click();
+  // Discarding asks first and says what is lost.
+  const confirm = page.getByRole("alertdialog", { name: "Discard this failed job?" });
+  await expect(confirm).toContainText("won't be tried again");
+  await confirm.getByRole("button", { name: "Discard" }).click();
   await expect(page.getByText("Discarded.")).toBeVisible();
   await expect(row).toHaveCount(0);
 

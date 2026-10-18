@@ -78,7 +78,7 @@ test.describe("editor content workflows", () => {
     await expect(page.getByLabel("Issue", { exact: true })).toHaveValue(issueId);
     const title = `Testing the Archive ${volume}`;
     await page.getByLabel("Title", { exact: true }).fill(title);
-    await expect(page.getByLabel("URL slug")).toHaveValue(`testing-the-archive-${volume}`);
+    await expect(page.getByLabel("Web address")).toHaveValue(`testing-the-archive-${volume}`);
     await page.getByLabel("Category", { exact: true }).selectOption({ label: "African Literature" });
     await page.getByLabel("First page").fill("1");
     await page.getByLabel("Last page").fill("12");
@@ -253,6 +253,89 @@ test.describe("editor content workflows", () => {
     await expect(top.getByRole("listitem").filter({ hasText: title })).toContainText("1 view · 1 download");
   });
 
+  test("saving a published article keeps its publication date", async ({ page }) => {
+    const volume = freshVolume();
+    await newDraftIssue(page, volume);
+    await page.getByRole("link", { name: "New article" }).click();
+    const title = `Keeping the Date ${volume}`;
+    await page.getByLabel("Title", { exact: true }).fill(title);
+    await page.getByLabel("Name", { exact: true }).fill("Ada Testauthor");
+    await page.getByRole("button", { name: "Create draft article" }).click();
+    await expect(page).toHaveURL(/\/admin\/articles\/[0-9a-f-]{36}$/);
+    const articleId = page.url().split("/").pop()!;
+    await expect(page.getByLabel("Publication date")).toHaveValue("");
+
+    await page.getByRole("button", { name: "Publish article" }).click();
+    await expect(page.getByText(/It will appear when its issue is published/)).toBeVisible();
+    // The form picks up the date the server set when publishing.
+    await expect(page.getByLabel("Publication date")).not.toHaveValue("");
+
+    await page.getByLabel("Title", { exact: true }).fill(`${title} (revised)`);
+    await page.getByRole("button", { name: "Save article" }).click();
+    await expect(page.getByText("Article saved.")).toBeVisible();
+    const { data } = await adminClient()
+      .from("articles")
+      .select("title, published_at")
+      .eq("id", articleId)
+      .single();
+    expect(data?.title).toBe(`${title} (revised)`);
+    expect(data?.published_at).not.toBeNull();
+    await expect(page.getByLabel("Publication date")).toHaveValue(data!.published_at!.slice(0, 10));
+  });
+
+  test("publishing an empty issue needs a tick, and renumbering keeps the old address", async ({ page }) => {
+    const volume = freshVolume();
+    await newDraftIssue(page, volume);
+    await page.getByRole("button", { name: "Publish issue" }).click();
+    const dialog = page.getByRole("alertdialog");
+    await expect(dialog).toContainText("This issue has no articles.");
+    await expect(dialog).toContainText("There’s no cover image.");
+    await expect(dialog.getByRole("button", { name: "Publish" })).toBeDisabled();
+    await dialog.getByLabel("Publish it anyway, with no articles").check();
+    await dialog.getByRole("button", { name: "Publish" }).click();
+    await expect(page.getByText("Issue published.", { exact: false })).toBeVisible();
+
+    // Changing the number of a live issue warns first, and the old address redirects.
+    await page.getByLabel("Issue number").fill("2");
+    await expect(page.getByText(`Its address will change from /issues/${volume}/1`)).toBeVisible();
+    await page.getByRole("button", { name: "Save details" }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Change the number" }).click();
+    await expect(page.getByText("Issue saved.")).toBeVisible();
+    await page.goto(`/issues/${volume}/1`);
+    await expect(page).toHaveURL(new RegExp(`/issues/${volume}/2$`));
+  });
+
+  test("leaving a page with unsaved changes asks first", async ({ page }) => {
+    const issueId = await newDraftIssue(page, freshVolume());
+    await page.getByLabel("Title (optional)").fill("Not saved yet");
+    await page.getByRole("link", { name: "Bulk upload" }).click();
+    const dialog = page.getByRole("alertdialog", { name: "Leave without saving?" });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(page).toHaveURL(new RegExp(`/admin/issues/${issueId}$`));
+    await expect(page.getByLabel("Title (optional)")).toHaveValue("Not saved yet");
+
+    await page.getByRole("link", { name: "Bulk upload" }).click();
+    await dialog.getByRole("button", { name: "Leave without saving" }).click();
+    await expect(page).toHaveURL(new RegExp(`/admin/issues/${issueId}/bulk$`));
+  });
+
+  test("bulk upload gives articles with the same title their own web addresses", async ({ page }) => {
+    const issueId = await newDraftIssue(page, freshVolume());
+    await page.getByRole("link", { name: "Bulk upload" }).click();
+    const title = `Same Title ${Date.now()}`;
+    for (let i = 0; i < 2; i++) {
+      await page.getByRole("button", { name: "Add row" }).click();
+      await page.getByLabel("Title", { exact: true }).nth(i).fill(title);
+      await page.getByLabel("Authors", { exact: true }).nth(i).fill("Ada Testauthor");
+    }
+    await page.getByRole("button", { name: "Start" }).click();
+    await expect(page.getByText("All done.", { exact: false })).toBeVisible({ timeout: 30_000 });
+    const { data } = await adminClient().from("articles").select("slug").eq("issue_id", issueId);
+    const base = title.toLowerCase().replace(/ /g, "-");
+    expect((data ?? []).map((a) => a.slug).sort()).toEqual([base, `${base}-2`]);
+  });
+
   test("a stale edit is refused with a clear message", async ({ page }) => {
     const issueId = await newDraftIssue(page, freshVolume());
     // Someone else saves the issue in the meantime.
@@ -271,6 +354,16 @@ test.describe("editor content workflows", () => {
     await expect(page.getByText(name)).toBeVisible();
     await page.goto("/scope");
     await expect(page.getByRole("region", { name: "Subject areas" }).getByText(name)).toBeVisible();
+
+    // A new web address keeps the old one working.
+    const slug = name.toLowerCase().replace(/ /g, "-");
+    await page.goto("/admin/categories");
+    await page.getByRole("button", { name: `Edit ${name}` }).click();
+    await page.getByLabel("Web address").fill(`${slug}-moved`);
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText(`/categories/${slug}-moved`, { exact: false })).toBeVisible();
+    await page.goto(`/categories/${slug}`);
+    await expect(page).toHaveURL(new RegExp(`/categories/${slug}-moved$`));
   });
 
   test("editors can't open Super Admin sections", async ({ page }) => {
@@ -288,6 +381,35 @@ test.describe("Super Admin content", () => {
     await expect(page).toHaveURL(/\/admin$/);
   });
 
+  test("a trashed issue holds its number until it's deleted forever", async ({ page }) => {
+    const volume = freshVolume();
+    const issueId = await newDraftIssue(page, volume);
+    await page.getByRole("button", { name: "Move to trash" }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Move to trash" }).click();
+    await expect(page.getByText("Issue moved to trash.", { exact: false })).toBeVisible();
+
+    await page.goto("/admin/issues");
+    const card = page.locator("div.rounded-lg", { has: page.getByText(`Volume ${volume}`, { exact: true }) });
+    await card.getByRole("button", { name: "Add issue" }).click();
+    await page.getByLabel("Issue no.").fill("1");
+    await page.getByRole("button", { name: "Create draft issue" }).click();
+    await expect(
+      page.getByText("it's in the trash — restore it or delete it forever", { exact: false }),
+    ).toBeVisible();
+
+    await page.goto(`/admin/issues/${issueId}`);
+    await page.getByRole("button", { name: "Delete forever" }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Delete forever" }).click();
+    await expect(page.getByText("Issue deleted forever.", { exact: false })).toBeVisible();
+    await expect(page).toHaveURL(/\/admin\/issues$/);
+
+    // The volume is empty now, so it can be deleted from its Edit dialog.
+    await page.getByRole("button", { name: `Edit Volume ${volume}` }).click();
+    await page.getByRole("button", { name: "Delete volume" }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Delete volume" }).click();
+    await expect(page.getByText("Volume deleted.")).toBeVisible();
+  });
+
   test("editing a static page updates the public page", async ({ page }) => {
     const marker = `Edited by the end-to-end test ${Date.now()}.`;
     await page.goto("/admin/pages/privacy");
@@ -298,19 +420,42 @@ test.describe("Super Admin content", () => {
     await expect(page.getByText("Page saved and published.")).toBeVisible();
     await page.goto("/privacy");
     await expect(page.getByText(marker)).toBeVisible();
+
+    // The save is in the page's history and the audit log, which links back by slug.
+    await page.goto("/admin/audit-log?action=update&entity=pages");
+    const entry = page.getByRole("list", { name: "Audit log entries" }).getByRole("listitem").first();
+    await expect(entry).toContainText("Edited");
+    await entry.getByText("Details").click();
+    await expect(entry).toContainText("Page text:");
+    await entry.getByRole("link").click();
+    await expect(page).toHaveURL(/\/admin\/pages\/privacy$/);
+
+    // An earlier version can be brought back into the editor (not saved until asked).
+    const history = page.getByRole("region", { name: "History" });
+    await history.getByRole("button", { name: "Restore this version" }).first().click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Restore into the editor" }).click();
+    await expect(page.getByText("Version restored into the editor.", { exact: false })).toBeVisible();
+    await expect(page.locator("#p-content")).not.toContainText(marker);
   });
 
   test("feature flags can be switched off and on", async ({ page }) => {
     await page.goto("/admin/settings");
-    const flag = page.getByRole("switch", { name: /Home most read/ });
+    const flag = page.getByRole("switch", { name: /Most read on the home page/ });
     await expect(flag).toHaveAttribute("aria-checked", "true");
     await flag.click();
+    // Nothing changes until the effect has been explained and confirmed.
+    const dialog = page.getByRole("alertdialog");
+    await expect(dialog).toContainText("disappear from the home page");
+    await expect(flag).toHaveAttribute("aria-checked", "true");
+    await dialog.getByRole("button", { name: "Turn off" }).click();
+    await expect(page.getByText("Most read on the home page turned off.")).toBeVisible();
     await expect(flag).toHaveAttribute("aria-checked", "false");
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Most read" })).toHaveCount(0);
     await page.goto("/admin/settings");
-    await page.getByRole("switch", { name: /Home most read/ }).click();
-    await expect(page.getByRole("switch", { name: /Home most read/ })).toHaveAttribute(
+    await page.getByRole("switch", { name: /Most read on the home page/ }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Turn on" }).click();
+    await expect(page.getByRole("switch", { name: /Most read on the home page/ })).toHaveAttribute(
       "aria-checked",
       "true",
     );

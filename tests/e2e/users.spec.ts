@@ -39,7 +39,12 @@ test("the last Super Admin cannot be demoted", async ({ page }) => {
   }
   await page.goto(`/admin/users?q=${encodeURIComponent(SUPER_ADMIN.email)}`);
   await page.getByLabel(/Role for/).selectOption("editor");
-  await page.getByRole("alertdialog").getByRole("button", { name: "Change role" }).click();
+  // Changing your own role says plainly what you would lose.
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toContainText(
+    "You will lose access to Users and Roles, Settings and Pages immediately",
+  );
+  await dialog.getByRole("button", { name: "Change my role" }).click();
   // The toast's own wording (the page description repeats the rule itself).
   await expect(page.getByText("Promote someone else first.", { exact: false })).toBeVisible();
   const { data: me } = await supabase.from("profiles").select("role").eq("email", SUPER_ADMIN.email).single();
@@ -72,6 +77,26 @@ test("Super Admin invites a reviewer", async ({ page }) => {
 
   const { data } = await adminClient().from("profiles").select("role, full_name").eq("email", email).single();
   expect(data).toEqual({ role: "reviewer", full_name: "Invited Reviewer" });
+});
+
+test("an invitation error keeps what was typed, and reopening starts afresh", async ({ page }) => {
+  await page.goto("/admin/users");
+  await page.getByRole("button", { name: "Invite user" }).click();
+  const dialog = page.getByRole("dialog", { name: "Invite a user" });
+  await expect(dialog).toContainText("Reviews the manuscripts assigned to them");
+  await dialog.getByLabel("Full name").fill("Typo Person");
+  await dialog.getByLabel("Email").fill("not-an-email");
+  await dialog.getByLabel("Role").selectOption("editor");
+  await dialog.getByRole("button", { name: "Send invitation" }).click();
+  await expect(dialog.getByText("Enter a valid email address.")).toBeVisible();
+  await expect(dialog.getByLabel("Full name")).toHaveValue("Typo Person");
+  await expect(dialog.getByLabel("Email")).toHaveValue("not-an-email");
+  await expect(dialog.getByLabel("Role")).toHaveValue("editor");
+
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("button", { name: "Invite user" }).click();
+  await expect(dialog.getByText("Enter a valid email address.")).toHaveCount(0);
+  await expect(dialog.getByLabel("Full name")).toHaveValue("");
 });
 
 test("editors cannot open Users and Roles", async ({ page, browser }) => {
