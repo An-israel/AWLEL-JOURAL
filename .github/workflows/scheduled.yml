@@ -1,11 +1,13 @@
 # Runs the queue worker every 30 minutes (item 21): retries emails that
 # failed, sends queued work and checks the alert rules. Vercel's free plan
 # only allows daily cron jobs, so the frequent schedule lives here; the daily
-# tasks run from vercel.json. Every 30 minutes uses about 1,450 Actions
-# minutes a month (each run is billed as a full minute), inside the 2,000 free
-# minutes of a private repository. GitHub may delay scheduled runs at busy times.
+# tasks run from vercel.json. Actions minutes are free and unlimited in a
+# public repository. In a private one each run is billed as a full minute, so
+# this uses about 1,440 of the 2,000 free minutes a month (the weekly backup
+# needs about 40 more). GitHub may delay scheduled runs at busy times.
 # Repository secrets (Settings → Secrets and variables → Actions):
-#   SITE_URL     https://your-domain (no trailing slash)
+#   SITE_URL     the site's exact address, e.g. https://your-domain (no trailing
+#                slash, and the address the domain does not redirect away from)
 #   CRON_SECRET  the same value as in Vercel
 name: Scheduled tasks
 
@@ -20,12 +22,16 @@ concurrency:
 
 permissions:
   contents: read
+  # Only for the keep-alive step below.
+  actions: write
 
 jobs:
   queue:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      # The site must answer 2xx itself: a redirect (for example from the bare
+      # domain to www) would otherwise "succeed" without running anything.
       - name: Run the queue worker
         env:
           SITE_URL: ${{ secrets.SITE_URL }}
@@ -35,5 +41,28 @@ jobs:
             echo "::notice::SITE_URL or CRON_SECRET is not set; skipping."
             exit 0
           fi
-          curl --fail-with-body --silent --show-error --max-time 90 \
-            -H "Authorization: Bearer $CRON_SECRET" "$SITE_URL/api/cron/queue"
+          out=$(curl -sS -o response.txt -w '%{http_code} %{redirect_url}' --max-time 90 \
+            -H "Authorization: Bearer $CRON_SECRET" "$SITE_URL/api/cron/queue") \
+            || { echo "::error::Could not reach SITE_URL ($SITE_URL)."; exit 1; }
+          code=${out%% *}; target=${out#* }
+          cat response.txt; echo
+          case "$code" in
+            2??) ;;
+            3??) echo "::error::SITE_URL redirects to ${target%%/api/*}; set SITE_URL to the exact address."; exit 1 ;;
+            *) echo "::error::The site answered HTTP $code."; exit 1 ;;
+          esac
+
+      # GitHub switches off scheduled workflows in a public repository after 60
+      # days without repository activity. Re-enabling them through the API
+      # (harmless when they are already on) restarts that count, so no
+      # keep-alive commits are needed. Once a day; never fails the run.
+      - name: Keep the schedules switched on
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ "$(date -u +%H)" = "03" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ] || exit 0
+          for workflow in scheduled.yml backup.yml; do
+            gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/enable" \
+              || echo "::warning::Could not re-enable $workflow; re-enable it from the Actions tab if GitHub disables it."
+          done

@@ -1,6 +1,7 @@
-# CI on every pull request and push to main or the production branch (item 6).
+# CI on every pull request and push to the production branch (item 6).
 # Vercel's Git integration builds a preview per PR and deploys production on
-# merge to main; database migrations are applied by migrate.yml.
+# merge. Production database updates are applied by pasting
+# supabase/setup/production-setup.sql (docs/LAUNCH_GUIDE.md).
 name: CI
 
 on:
