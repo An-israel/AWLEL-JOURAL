@@ -70,7 +70,7 @@ export async function SiteFooter() {
       <div className="border-t border-white/10">
         <div className="mx-auto flex max-w-site flex-col gap-2 px-4 py-5 text-xs text-white/70 sm:px-6 md:flex-row md:justify-between lg:px-8">
           <p>
-            © <CurrentYear /> Department of English and Literary Studies, University of Nigeria, Nsukka
+            © <CurrentYear /> {settings.publisher}
           </p>
           <p>ISSN {settings.issn}</p>
         </div>

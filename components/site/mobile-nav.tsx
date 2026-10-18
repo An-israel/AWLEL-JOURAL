@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { MAIN_NAV } from "@/lib/site";
+import { accountLink, useSignedIn } from "./account-link";
 import { isActive } from "./main-nav";
 
 /**
@@ -14,6 +15,10 @@ import { isActive } from "./main-nav";
 export function MobileNav() {
   const dialog = useRef<HTMLDialogElement>(null);
   const pathname = usePathname();
+  // Phones have no header account link (it is hidden below 640px), so the
+  // menu carries it, with the same label (item 31).
+  const { signedIn, recheck } = useSignedIn();
+  const account = accountLink(signedIn);
 
   // Close after navigating.
   useEffect(() => {
@@ -24,7 +29,10 @@ export function MobileNav() {
     <>
       <button
         type="button"
-        onClick={() => dialog.current?.showModal()}
+        onClick={() => {
+          recheck();
+          dialog.current?.showModal();
+        }}
         className="inline-flex size-11 items-center justify-center rounded-md text-navy hover:bg-paper xl:hidden"
         aria-label="Open menu"
         aria-haspopup="dialog"
@@ -35,7 +43,9 @@ export function MobileNav() {
         ref={dialog}
         aria-label="Menu"
         onClick={(e) => {
-          if (e.target === dialog.current) dialog.current.close();
+          // A tap on the backdrop, or on any link, including the one for the
+          // page already open, which would not change the path (item 32).
+          if (e.target === dialog.current || (e.target as Element).closest("a")) dialog.current?.close();
         }}
         className="m-0 ml-auto h-dvh max-h-dvh w-[min(22rem,88vw)] max-w-none bg-white p-0 shadow-2xl backdrop:bg-ink/50 open:animate-[slide-in_200ms_ease-out]"
       >
@@ -82,10 +92,11 @@ export function MobileNav() {
               Submit a Manuscript
             </Link>
             <Link
-              href="/login"
+              href={account.href}
+              onFocus={recheck}
               className="block rounded-md border border-line px-4 py-3 text-center font-medium text-navy no-underline hover:border-navy"
             >
-              Sign in
+              {account.label}
             </Link>
           </div>
         </div>

@@ -2,10 +2,13 @@ import { authorLine } from "@/components/catalog/author-names";
 import { getArticleBySlug, getPublishedArticleSlugs } from "@/lib/data/catalog";
 import { getSiteSettings } from "@/lib/data/site-settings";
 import { brandedImage, OG_SIZE } from "@/lib/seo/og-image";
+import { SITE_DEFAULTS } from "@/lib/site";
 
 export const size = OG_SIZE;
 export const contentType = "image/png";
-export const alt = "Article in AWLEL: African, World Literature and English Language";
+// A static export: it cannot read Settings, so it names the journal from the
+// built-in defaults (lib/site.ts), the one place the name is hard-coded.
+export const alt = `Article in ${SITE_DEFAULTS.shortName}: ${SITE_DEFAULTS.journalName}`;
 
 export async function generateStaticParams() {
   const slugs = await getPublishedArticleSlugs();

@@ -31,14 +31,14 @@ export async function SiteHeader() {
             <span className="min-w-0">
               <span className="flex items-center gap-2">
                 <span className="text-2xl leading-none font-bold tracking-tight text-navy sm:text-[1.7rem]">
-                  AWLEL
+                  {settings.shortName}
                 </span>
                 <span className="rounded-sm bg-coral-ink px-1.5 py-0.5 text-[0.65rem] leading-none font-bold tracking-[0.18em] text-white uppercase">
                   Journal
                 </span>
               </span>
               <span className="mt-1 hidden truncate text-[0.8rem] text-ink-muted md:block">
-                African, World Literature and English Language
+                {settings.journalName}
               </span>
               <span className="sr-only">, home page</span>
             </span>

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { plural } from "@/lib/plural";
 import { ArchiveBrowser, type YearGroup } from "@/components/catalog/archive-browser";
 import { IssueCover } from "@/components/catalog/issue-cover";
 import { getArticleCountsByIssue, getPublishedIssues, type IssueSummary } from "@/lib/data/catalog";
@@ -38,7 +39,9 @@ export default async function ArchivePage() {
                     {issue.label}
                   </span>
                   <span className="mt-0.5 block text-sm text-ink-muted">
-                    {[issue.legacyLabel, `${counts[issue.id] ?? 0} articles`].filter(Boolean).join(" · ")}
+                    {[issue.legacyLabel, plural(counts[issue.id] ?? 0, "article")]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </span>
                 </Link>
               </li>
