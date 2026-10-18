@@ -9,7 +9,8 @@ import { siteUrl } from "@/lib/env.public";
 import { checkDependencies } from "./health";
 import { drainQueue } from "./jobs";
 import { logger } from "./logger";
-import { notifyReviewReminder } from "./notify";
+import { notifyPublishedSubmissions } from "@/lib/submissions/published";
+import { notifyReviewReminder, notifyRevisionReminder } from "./notify";
 import { certificateDaysLeft } from "./tls";
 import { withSpan } from "./tracing";
 
@@ -50,6 +51,8 @@ const handlers: Record<TaskName, (holder: string) => Promise<Detail>> = {
     const supabase = createSupabaseAdminClient();
     const { data, error } = await supabase.rpc("due_review_reminders");
     if (error) throw new Error(error.message);
+    // reminder_sent_at doesn't bump the review's version (item 61), so a
+    // reviewer with the form open gets no false conflict.
     let sent = 0;
     for (const r of data ?? []) {
       await notifyReviewReminder({
@@ -66,7 +69,30 @@ const handlers: Record<TaskName, (holder: string) => Promise<Detail>> = {
         .eq("id", r.assignment_id);
       sent++;
     }
-    return { reminders: sent };
+
+    // Overdue revisions: the author is reminded at most once a week (item 54).
+    const { data: revisions, error: revisionsError } = await supabase.rpc("due_revision_reminders");
+    if (revisionsError) throw new Error(revisionsError.message);
+    let revisionReminders = 0;
+    for (const s of revisions ?? []) {
+      await notifyRevisionReminder({
+        submissionId: s.submission_id,
+        authorEmail: s.author_email,
+        authorName: s.author_name,
+        title: s.title,
+        dueDate: s.due_date,
+        today: today(),
+      });
+      await supabase
+        .from("submissions")
+        .update({ revision_reminder_sent_at: new Date().toISOString() })
+        .eq("id", s.submission_id);
+      revisionReminders++;
+    }
+
+    // Safety net for publication emails (item 57), whichever way the issue was published.
+    const published = await notifyPublishedSubmissions();
+    return { reminders: sent, revisionReminders, publishedEmails: published };
   },
 
   rollup: async () => {

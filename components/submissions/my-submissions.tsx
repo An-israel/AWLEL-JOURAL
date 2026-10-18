@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { StatusBadge } from "./status-badge";
+import { isUnfinished, StatusBadge } from "./status-badge";
 
 const date = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" });
 
@@ -9,7 +9,7 @@ export async function MySubmissions({ userId, limit }: { userId: string; limit?:
   const supabase = await createSupabaseServerClient();
   let query = supabase
     .from("submissions")
-    .select("id, title, status, created_at, updated_at")
+    .select("id, title, status, finalised_at, created_at, updated_at")
     .eq("author_id", userId)
     .order("created_at", { ascending: false });
   if (limit) query = query.limit(limit);
@@ -24,20 +24,31 @@ export async function MySubmissions({ userId, limit }: { userId: string; limit?:
   }
   return (
     <ul className="mt-4 divide-y divide-line">
-      {data.map((s) => (
-        <li key={s.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-          <div className="min-w-0">
-            <Link href={`/account/submissions/${s.id}`} className="font-medium">
-              {s.title}
-            </Link>
-            <p className="text-xs text-ink-muted">
-              Submitted {date.format(new Date(s.created_at))} · last update{" "}
-              {date.format(new Date(s.updated_at))}
-            </p>
-          </div>
-          <StatusBadge status={s.status} />
-        </li>
-      ))}
+      {data.map((s) => {
+        const unfinished = isUnfinished(s);
+        return (
+          <li key={s.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <div className="min-w-0">
+              <Link href={`/account/submissions/${s.id}`} className="font-medium">
+                {s.title}
+              </Link>
+              <p className="text-xs text-ink-muted">
+                {unfinished ? (
+                  <span className="font-semibold text-coral-ink">
+                    Not finished — upload your manuscript to submit it
+                  </span>
+                ) : (
+                  <>
+                    Submitted {date.format(new Date(s.created_at))} · last update{" "}
+                    {date.format(new Date(s.updated_at))}
+                  </>
+                )}
+              </p>
+            </div>
+            <StatusBadge status={s.status} unfinished={unfinished} />
+          </li>
+        );
+      })}
     </ul>
   );
 }

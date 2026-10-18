@@ -10,7 +10,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { signatureMatches } from "@/lib/file-signature";
 import { readObjectHead } from "@/lib/server/file-head";
-import { checkSubmissionFile, type SubmissionFileKind } from "./file-rules";
+import { checkSubmissionFile, submissionMimeOf, type SubmissionFileKind } from "./file-rules";
 
 /*
  * Files in the private `submissions` bucket. Who may add which kind:
@@ -35,8 +35,8 @@ async function mayUpload(submissionId: string, kind: SubmissionFileKind): Promis
       .eq("submission_id", submissionId)
       .eq("reviewer_id", user.id)
       .eq("status", "pending")
-      .maybeSingle();
-    return Boolean(data);
+      .limit(1);
+    return Boolean(data?.length);
   }
   const { data } = await supabase
     .from("submissions")
@@ -64,10 +64,7 @@ export async function requestSubmissionUpload(
   const parsed = requestSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Invalid upload request." };
   const { submissionId, kind, fileName, mimeType, size } = parsed.data;
-  const problem = checkSubmissionFile(
-    { name: fileName, type: mimeType, size },
-    kind === "original" && fileName.toLowerCase().endsWith(".docx"),
-  );
+  const problem = checkSubmissionFile({ name: fileName, type: mimeType, size });
   if (problem) return { ok: false, message: problem };
   if (!(await mayUpload(submissionId, kind))) return forbiddenResult;
 
@@ -93,13 +90,15 @@ export async function attachSubmissionFile(
 ): Promise<ActionResult<{ id: string; version: number }>> {
   const parsed = attachSchema.safeParse(input);
   if (!parsed.success) return { ok: false, message: "Invalid upload." };
-  const { submissionId, kind, path, fileName, mimeType, size } = parsed.data;
+  const { submissionId, kind, path, fileName, size } = parsed.data;
   const user = await getCurrentUser();
   if (!user || !(await mayUpload(submissionId, kind))) return forbiddenResult;
   if (!path.startsWith(`${submissionId}/${kind}/`) || path.includes(".."))
     return { ok: false, message: "Invalid upload path." };
-  const problem = checkSubmissionFile({ name: fileName, type: mimeType, size });
+  const problem = checkSubmissionFile({ name: fileName, type: parsed.data.mimeType, size });
   if (problem) return { ok: false, message: problem };
+  // The real type from the extension, even when the device reported none (item 49).
+  const mimeType = submissionMimeOf({ name: fileName, type: parsed.data.mimeType })!;
 
   const admin = createSupabaseAdminClient();
   // The content must match the declared type, not just the name (magic bytes).
@@ -114,26 +113,25 @@ export async function attachSubmissionFile(
   const object = listing?.find((o) => o.name === name);
   if (!object) return { ok: false, message: "The upload didn't finish. Please try again." };
 
+  // The version is numbered by the database under a lock and is unique per
+  // submission and kind (item 65); one retry covers a rare clash.
   const supabase = await createSupabaseServerClient();
-  const { count } = await supabase
-    .from("submission_files")
-    .select("id", { count: "exact", head: true })
-    .eq("submission_id", submissionId)
-    .eq("kind", kind);
-  const { data, error } = await supabase
-    .from("submission_files")
-    .insert({
-      submission_id: submissionId,
-      path,
-      original_name: fileName,
-      mime_type: mimeType,
-      size_bytes: (object.metadata?.size as number | undefined) ?? size,
-      kind,
-      uploaded_by: user.id,
-      version: (count ?? 0) + 1,
-    })
-    .select("id, version")
-    .single();
+  const insert = () =>
+    supabase
+      .from("submission_files")
+      .insert({
+        submission_id: submissionId,
+        path,
+        original_name: fileName,
+        mime_type: mimeType,
+        size_bytes: (object.metadata?.size as number | undefined) ?? size,
+        kind,
+        uploaded_by: user.id,
+      })
+      .select("id, version")
+      .single();
+  let { data, error } = await insert();
+  if (error?.code === "23505" && /version/.test(error.message)) ({ data, error } = await insert());
   if (error || !data) {
     // Compensation: the object must not outlive a failed database write.
     await admin.storage.from(BUCKET).remove([path]);
@@ -170,18 +168,21 @@ export async function submissionFileUrl(fileId: string): Promise<ActionResult<{ 
   // Allowed: read the details with the service role (the reviewer can't).
   const { data: file } = await admin
     .from("submission_files")
-    .select("path, original_name, kind, version, submission_id")
+    .select("path, original_name, kind, version, submission_id, mime_type")
     .eq("id", fileId)
     .single();
   if (!file) return { ok: false, message: "File not found." };
 
   const ext = file.original_name.slice(file.original_name.lastIndexOf(".")).toLowerCase();
+  // Named by role (item 64): the optional PDF copy is an "original" too.
   const label =
     file.kind === "revision"
       ? "Revised_manuscript"
       : file.kind === "reviewer_annotated"
         ? "Annotated_review"
-        : "Manuscript";
+        : file.mime_type === "application/pdf"
+          ? "Manuscript_PDF_copy"
+          : "Manuscript";
   const downloadName = blinded
     ? `${label}_${file.submission_id.slice(0, 8)}_v${file.version}${ext}`
     : file.original_name;

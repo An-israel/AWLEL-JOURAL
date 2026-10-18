@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { fromDbError, forbiddenResult, invalid, type ActionResult } from "@/lib/admin/result";
@@ -104,7 +105,7 @@ export async function createSubmission(input: SubmissionInput): Promise<ActionRe
   return { ok: true, data: { id: data.id } };
 }
 
-/** Step 3: once the manuscript file is in, announce the submission (idempotent). */
+/** Step 3: once the manuscript file is in, finish and announce the submission (idempotent). */
 export async function finalizeSubmission(submissionId: string): Promise<ActionResult> {
   if (!z.uuid().safeParse(submissionId).success) return { ok: false, message: "Invalid submission." };
   const user = await getCurrentUser();
@@ -117,22 +118,20 @@ export async function finalizeSubmission(submissionId: string): Promise<ActionRe
     .eq("author_id", user.id)
     .maybeSingle();
   if (!sub) return forbiddenResult;
-  const { count } = await supabase
-    .from("submission_files")
-    .select("id", { count: "exact", head: true })
-    .eq("submission_id", submissionId)
-    .eq("kind", "original")
-    .like("original_name", "%.docx");
-  if (!count) return { ok: false, message: "Please upload your manuscript as a Word document (.docx)." };
 
-  const admin = createSupabaseAdminClient();
-  const { count: announced } = await admin
-    .from("domain_events")
-    .select("id", { count: "exact", head: true })
-    .eq("event_type", "submission.created")
-    .eq("aggregate_id", submissionId);
-  if (!announced) {
-    await admin.from("domain_events").insert({
+  // finalize_submission checks for the original Word file by kind and by
+  // extension or type in any letter case (item 48: "PAPER.DOCX" counts), and
+  // is true only the first time, so the emails go out once. Until then the
+  // submission is "not finished" (item 51): the editors' queue leaves it out
+  // and the author can upload the manuscript later from their account.
+  const { data: first, error } = await supabase.rpc("finalize_submission", { p_submission_id: submissionId });
+  if (error) {
+    return error.code === "AW422"
+      ? { ok: false, message: "Please upload your manuscript as a Word document (.docx)." }
+      : fromDbError(error, "submission");
+  }
+  if (first) {
+    await createSupabaseAdminClient().from("domain_events").insert({
       event_type: "submission.created",
       aggregate_type: "submission",
       aggregate_id: submissionId,
@@ -145,5 +144,6 @@ export async function finalizeSubmission(submissionId: string): Promise<ActionRe
       authorName: user.fullName,
     });
   }
+  revalidatePath(`/account/submissions/${submissionId}`);
   return { ok: true, message: "Your manuscript has been submitted." };
 }

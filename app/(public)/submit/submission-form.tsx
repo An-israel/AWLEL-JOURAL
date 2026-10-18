@@ -70,6 +70,9 @@ export function SubmissionForm({
   const [stage, setStage] = useState<"idle" | "saving" | "uploading" | "finishing">("idle");
   const [progress, setProgress] = useState(0);
   const submissionId = useRef<string | null>(null);
+  // Files already uploaded to this submission, by name, size and date, so
+  // pressing Submit again after a failed upload skips them (item 50).
+  const uploaded = useRef(new Map<string, string>());
   const keySeq = useRef(0);
   const dirty = Boolean(form.title || form.abstract || manuscript);
   useUnsavedChanges(dirty && stage === "idle");
@@ -136,6 +139,8 @@ export function SubmissionForm({
       [pdf, "pdf"],
     ] as const) {
       if (!file) continue;
+      const fileKey = `${created.data.id}:${file.name}:${file.size}:${file.lastModified}`;
+      if (uploaded.current.has(fileKey)) continue;
       setProgress(0);
       const r = await uploadSubmissionFile(
         created.data.id,
@@ -152,6 +157,7 @@ export function SubmissionForm({
         );
         return;
       }
+      if (r.data) uploaded.current.set(fileKey, r.data.id);
     }
 
     setStage("finishing");
@@ -312,6 +318,7 @@ export function SubmissionForm({
                   }
                   className="mt-1 h-9"
                   aria-invalid={err(`coAuthors.${i}.${field}`) ? true : undefined}
+                  aria-describedby={err(`coAuthors.${i}.${field}`) ? `ca-${a.key}-${field}-error` : undefined}
                 />
                 <FieldError id={`ca-${a.key}-${field}-error`}>{err(`coAuthors.${i}.${field}`)}</FieldError>
               </div>
