@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { decodeEntities, isPrerenderAbort } from "@/lib/search-text";
 import { logger } from "@/lib/server/logger";
 import { createSupabasePublicClient } from "@/lib/supabase/public";
 
@@ -29,8 +30,7 @@ export interface SearchHit {
   abstractHighlight: string;
 }
 
-export async function searchArticles(params: SearchParams): Promise<{ hits: SearchHit[]; total: number }> {
-  const page = params.page ?? 1;
+async function runSearch(params: SearchParams, page: number) {
   const { data, error } = await createSupabasePublicClient().rpc("search_articles", {
     p_query: params.q ?? "",
     p_year: params.year,
@@ -41,17 +41,30 @@ export async function searchArticles(params: SearchParams): Promise<{ hits: Sear
     p_offset: (page - 1) * SEARCH_PAGE_SIZE,
   });
   if (error) {
+    if (isPrerenderAbort(error)) throw error;
     logger.error({ err: error }, "search failed");
     throw new Error("Search is temporarily unavailable");
   }
-  const rows = data ?? [];
+  return data ?? [];
+}
+
+export async function searchArticles(params: SearchParams): Promise<{ hits: SearchHit[]; total: number }> {
+  const page = params.page ?? 1;
+  const rows = await runSearch(params, page);
+  let total = rows.length ? Number(rows[0].total_count) : 0;
+  // A page past the end has no rows to carry the total, so ask for page 1's
+  // (item 33): the page can then say how many pages there really are.
+  if (rows.length === 0 && page > 1) {
+    const first = await runSearch(params, 1);
+    total = first.length ? Number(first[0].total_count) : 0;
+  }
   return {
-    total: rows.length ? Number(rows[0].total_count) : 0,
+    total,
     hits: rows.map((r) => ({
       id: r.id,
       slug: r.slug,
-      titleHighlight: r.title_highlight,
-      abstractHighlight: r.abstract_highlight,
+      titleHighlight: decodeEntities(r.title_highlight),
+      abstractHighlight: decodeEntities(r.abstract_highlight),
     })),
   };
 }
