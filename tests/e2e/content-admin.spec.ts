@@ -263,12 +263,12 @@ test.describe("editor content workflows", () => {
     await page.getByRole("button", { name: "Create draft article" }).click();
     await expect(page).toHaveURL(/\/admin\/articles\/[0-9a-f-]{36}$/);
     const articleId = page.url().split("/").pop()!;
-    await expect(page.locator("#a-date")).toHaveValue("");
+    await expect(page.locator("#a-date:visible")).toHaveValue("");
 
     await page.getByRole("button", { name: "Publish article" }).click();
     await expect(page.getByText(/It will appear when its issue is published/)).toBeVisible();
     // The form picks up the date the server set when publishing.
-    await expect(page.locator("#a-date")).not.toHaveValue("");
+    await expect(page.locator("#a-date:visible")).not.toHaveValue("");
 
     await page.getByLabel("Title", { exact: true }).fill(`${title} (revised)`);
     await page.getByRole("button", { name: "Save article" }).click();
@@ -280,7 +280,7 @@ test.describe("editor content workflows", () => {
       .single();
     expect(data?.title).toBe(`${title} (revised)`);
     expect(data?.published_at).not.toBeNull();
-    await expect(page.locator("#a-date")).toHaveValue(data!.published_at!.slice(0, 10));
+    await expect(page.locator("#a-date:visible")).toHaveValue(data!.published_at!.slice(0, 10));
   });
 
   test("publishing an empty issue needs a tick, and renumbering keeps the old address", async ({ page }) => {

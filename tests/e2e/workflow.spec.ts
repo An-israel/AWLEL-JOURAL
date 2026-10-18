@@ -170,7 +170,9 @@ test("editor reads the review, accepts and creates the article", async ({ page }
   await signIn(page, editor.email, TEST_PASSWORD);
   await page.goto(`/admin/submissions/${submissionId}`);
   await expect(page.getByText("Reviews received (1)")).toBeVisible();
-  await expect(page.getByText(/theoretical framework section should engage/)).toBeVisible();
+  await expect(
+    page.getByRole("article").getByText(/theoretical framework section should engage/),
+  ).toBeVisible();
 
   await page.getByLabel("New status").selectOption("accepted");
   await page.getByRole("button", { name: "Change to Accepted" }).click();
