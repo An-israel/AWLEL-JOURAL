@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, Eye, FilePlus2, Upload } from "lucide-react";
+import { AlertTriangle, ExternalLink, Eye, FilePlus2, Upload } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -15,14 +15,22 @@ import { ConfirmDialog } from "@/components/ui/dialog";
 import { FieldError, Input, Label, NativeSelect } from "@/components/ui/input";
 import { toast } from "@/components/ui/toaster";
 import type { AttachedFile } from "@/lib/admin/uploads";
-import { MONTHS } from "@/lib/issue-label";
-import { reorderIssueArticles, saveIssue, setIssueDeleted, setIssueStatus } from "../actions";
+import { issuePath, MONTHS } from "@/lib/issue-label";
+import {
+  deleteIssueForever,
+  reorderIssueArticles,
+  saveIssue,
+  setIssueDeleted,
+  setIssueStatus,
+} from "../actions";
+import { LEGACY_NUMBER_HINT } from "../legacy-hint";
 
 export interface IssueEditorData {
   id: string;
   version: number;
   label: string;
   publicPath: string;
+  volumeNumber: number;
   status: "draft" | "published";
   deleted: boolean;
   issueNumber: number;
@@ -37,13 +45,17 @@ export interface IssueEditorData {
     issue_pdf: AttachedFile | null;
     issue_docx: AttachedFile | null;
   };
-  articles: { id: string; title: string; status: "draft" | "published"; pages: string }[];
+  articles: { id: string; title: string; status: "draft" | "published"; pages: string; hasPdf: boolean }[];
+  /** Articles of this issue that are in the trash (deleted with it if it's deleted for good). */
+  trashedArticles: number;
+  /** Deleting for good follows the other permanent deletes: Super Admin only. */
+  canDeleteForever: boolean;
 }
 
-export function IssueEditor({ issue }: { issue: IssueEditorData }) {
-  const router = useRouter();
-  const [version, setVersion] = useState(issue.version);
-  const [form, setForm] = useState({
+type Confirm = "publish" | "unpublish" | "trash" | "renumber" | "delete-forever" | null;
+
+function formFrom(issue: IssueEditorData) {
+  return {
     issueNumber: String(issue.issueNumber),
     month: issue.month ? String(issue.month) : "",
     legacyNumber: issue.legacyNumber ? String(issue.legacyNumber) : "",
@@ -51,24 +63,51 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
     editorial: issue.editorial,
     coverAlt: issue.coverAlt,
     publishedAt: issue.publishedAt,
-  });
+  };
+}
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+export function IssueEditor({ issue }: { issue: IssueEditorData }) {
+  const router = useRouter();
+  const [version, setVersion] = useState(issue.version);
+  const [form, setForm] = useState(() => formFrom(issue));
   const [dirty, setDirty] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [conflict, setConflict] = useState(false);
   const [articles, setArticles] = useState(issue.articles);
   const [orderDirty, setOrderDirty] = useState(false);
-  const [includeDrafts, setIncludeDrafts] = useState(true);
-  const [confirm, setConfirm] = useState<"publish" | "unpublish" | "trash" | null>(null);
+  // Drafts stay drafts unless the editor asks otherwise (item 69).
+  const [includeDrafts, setIncludeDrafts] = useState(false);
+  const [publishEmpty, setPublishEmpty] = useState(false);
+  const [confirm, setConfirm] = useState<Confirm>(null);
   const [pending, start] = useTransition();
   useUnsavedChanges(dirty || orderDirty);
 
-  const drafts = articles.filter((a) => a.status === "draft").length;
+  // After a save, publish or unpublish the page reloads with the server's
+  // values: take them (items 68, 70) unless there are unsaved edits, which win.
+  const [loaded, setLoaded] = useState({ version: issue.version, articles: issue.articles });
+  if (issue.version !== loaded.version || issue.articles !== loaded.articles) {
+    setLoaded({ version: issue.version, articles: issue.articles });
+    if (issue.version !== loaded.version && !dirty) {
+      setForm(formFrom(issue));
+      setVersion(issue.version);
+    }
+    if (!orderDirty) setArticles(issue.articles);
+  }
+
+  const drafts = articles.filter((a) => a.status === "draft");
+  const goingLive = articles.filter((a) => a.status === "published" || includeDrafts);
+  const withoutPdf = goingLive.filter((a) => !a.hasPdf);
+  const renumbered = issue.status === "published" && form.issueNumber !== String(issue.issueNumber);
+
   const set = (key: keyof typeof form) => (value: string) => {
     setForm((f) => ({ ...f, [key]: value }));
     setDirty(true);
   };
 
   function save() {
+    setConfirm(null);
     start(async () => {
       const r = await saveIssue({ id: issue.id, expectedVersion: version, ...form });
       if (!r.ok) {
@@ -94,6 +133,7 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
               expectedVersion: version,
               status: kind === "publish" ? "published" : "draft",
               includeArticles: includeDrafts,
+              allowEmpty: publishEmpty,
             });
       setConfirm(null);
       if (!r.ok) {
@@ -103,6 +143,16 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
       if (r.data) setVersion(r.data.version);
       toast.success(r.message ?? "Done");
       router.refresh();
+    });
+  }
+
+  function deleteForever() {
+    start(async () => {
+      const r = await deleteIssueForever(issue.id);
+      setConfirm(null);
+      if (!r.ok) return void toast.error(r.message);
+      toast.success(r.message ?? "Deleted");
+      router.push("/admin/issues");
     });
   }
 
@@ -123,7 +173,8 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
             <Badge variant="gold">Draft</Badge>
           )}
           <span className="text-sm text-ink-muted">
-            {articles.length} articles{drafts ? `, ${drafts} still draft` : ""}
+            {plural(articles.length, "article")}
+            {drafts.length ? `, ${drafts.length} still draft` : ""}
           </span>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -140,9 +191,25 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
             </Button>
           ) : null}
           {issue.deleted ? (
-            <Button variant="outline" disabled={pending} onClick={() => runStatus("restore")}>
-              Restore
-            </Button>
+            <>
+              {issue.canDeleteForever ? (
+                <Button
+                  variant="ghost"
+                  disabled={pending || articles.length > 0}
+                  title={
+                    articles.length > 0
+                      ? "Move its articles to the trash, or into another issue, first"
+                      : undefined
+                  }
+                  onClick={() => setConfirm("delete-forever")}
+                >
+                  Delete forever
+                </Button>
+              ) : null}
+              <Button variant="outline" disabled={pending} onClick={() => runStatus("restore")}>
+                Restore
+              </Button>
+            </>
           ) : (
             <>
               <Button variant="ghost" disabled={pending} onClick={() => setConfirm("trash")}>
@@ -156,7 +223,11 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
                 <Button
                   disabled={pending || dirty}
                   title={dirty ? "Save your changes first" : undefined}
-                  onClick={() => setConfirm("publish")}
+                  onClick={() => {
+                    setIncludeDrafts(false);
+                    setPublishEmpty(false);
+                    setConfirm("publish");
+                  }}
                 >
                   Publish issue
                 </Button>
@@ -164,6 +235,13 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
             </>
           )}
         </div>
+        {issue.deleted && issue.canDeleteForever ? (
+          <p className="w-full text-sm text-ink-muted">
+            {articles.length > 0
+              ? `To delete this issue forever, first move its ${plural(articles.length, "article")} to the trash or into another issue. Until then you can restore it.`
+              : "Deleting forever frees its number in the volume. It can't be undone."}
+          </p>
+        ) : null}
       </section>
 
       <section aria-labelledby="details-title" className="rounded-lg border border-line bg-white p-5">
@@ -180,9 +258,16 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
               value={form.issueNumber}
               onChange={(e) => set("issueNumber")(e.target.value)}
               className="mt-1.5"
-              aria-describedby="f-issue-error"
+              aria-describedby="f-issue-warning f-issue-error"
               aria-invalid={errors.issueNumber ? true : undefined}
             />
+            {renumbered ? (
+              <p id="f-issue-warning" className="mt-1 text-xs text-[#7A4F18]">
+                This issue is live. Its address will change from {issue.publicPath} to{" "}
+                {issuePath(issue.volumeNumber, Number(form.issueNumber) || 0)}. The old address keeps working
+                and sends readers to the new one.
+              </p>
+            ) : null}
             <FieldError id="f-issue-error">{errors.issueNumber}</FieldError>
           </div>
           <div>
@@ -202,7 +287,7 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
             </NativeSelect>
           </div>
           <div>
-            <Label htmlFor="f-legacy">Legacy number (optional)</Label>
+            <Label htmlFor="f-legacy">Old running number (optional)</Label>
             <Input
               id="f-legacy"
               type="number"
@@ -211,7 +296,11 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
               onChange={(e) => set("legacyNumber")(e.target.value)}
               className="mt-1.5"
               placeholder="e.g. 19"
+              aria-describedby="f-legacy-hint"
             />
+            <p id="f-legacy-hint" className="mt-1 text-xs text-ink-muted">
+              {LEGACY_NUMBER_HINT}
+            </p>
           </div>
           <div>
             <Label htmlFor="f-date">Publication date</Label>
@@ -258,7 +347,7 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
           </div>
         </div>
         <div className="mt-5 flex items-center gap-3">
-          <Button onClick={save} disabled={pending || !dirty}>
+          <Button onClick={() => (renumbered ? setConfirm("renumber") : save())} disabled={pending || !dirty}>
             {pending ? "Saving…" : "Save details"}
           </Button>
           {dirty ? <span className="text-sm text-ink-muted">Unsaved changes</span> : null}
@@ -355,11 +444,18 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
                   </Link>
                   {a.pages ? <span className="ml-2 text-xs text-ink-muted">{a.pages}</span> : null}
                 </div>
-                {a.status === "published" ? (
-                  <Badge variant="green">Published</Badge>
-                ) : (
-                  <Badge variant="gold">Draft</Badge>
-                )}
+                <span className="flex flex-wrap gap-1.5">
+                  {a.hasPdf ? null : (
+                    <Badge variant="coral" title="Readers can't download this article yet">
+                      No PDF
+                    </Badge>
+                  )}
+                  {a.status === "published" ? (
+                    <Badge variant="green">Published</Badge>
+                  ) : (
+                    <Badge variant="gold">Draft</Badge>
+                  )}
+                </span>
               </div>
             )}
           />
@@ -370,20 +466,75 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
         open={confirm === "publish"}
         onOpenChange={(o) => !o && setConfirm(null)}
         title={`Publish ${issue.label}?`}
+        confirmDisabled={articles.length === 0 && !publishEmpty}
         description={
           <span className="block space-y-3">
             <span className="block">
               The issue appears in the archive and on the home page straight away.
             </span>
-            {drafts > 0 ? (
-              <label className="flex items-center gap-2 text-ink">
-                <input
-                  type="checkbox"
-                  checked={includeDrafts}
-                  onChange={(e) => setIncludeDrafts(e.target.checked)}
-                />
-                Also publish its {drafts} draft {drafts === 1 ? "article" : "articles"}
-              </label>
+            {articles.length === 0 ||
+            !issue.files.issue_cover ||
+            withoutPdf.length > 0 ||
+            drafts.length > 0 ? (
+              <span className="block space-y-2 rounded-md border border-gold bg-[#FBF3E4] p-3 text-[#7A4F18]">
+                <span className="flex items-center gap-1.5 font-semibold">
+                  <AlertTriangle aria-hidden className="size-4" /> Before you publish
+                </span>
+                <span role="list" className="block space-y-2">
+                  {articles.length === 0 ? (
+                    <span role="listitem" className="block">
+                      This issue has no articles. Readers will find an empty issue.
+                      <label className="mt-1.5 flex items-center gap-2 font-medium">
+                        <input
+                          type="checkbox"
+                          checked={publishEmpty}
+                          onChange={(e) => setPublishEmpty(e.target.checked)}
+                        />
+                        Publish it anyway, with no articles
+                      </label>
+                    </span>
+                  ) : null}
+                  {!issue.files.issue_cover ? (
+                    <span role="listitem" className="block">
+                      There&rsquo;s no cover image. A plain placeholder is shown instead.
+                    </span>
+                  ) : null}
+                  {withoutPdf.length > 0 ? (
+                    <span role="listitem" className="block">
+                      {plural(withoutPdf.length, "article")} going live{" "}
+                      {withoutPdf.length === 1 ? "has" : "have"} no PDF, so readers can&rsquo;t download{" "}
+                      {withoutPdf.length === 1 ? "it" : "them"}:
+                      <span className="mt-1 block max-h-32 overflow-y-auto pl-4">
+                        {withoutPdf.map((a) => (
+                          <span key={a.id} className="block">
+                            · {a.title}
+                          </span>
+                        ))}
+                      </span>
+                    </span>
+                  ) : null}
+                  {drafts.length > 0 ? (
+                    <span role="listitem" className="block">
+                      {plural(drafts.length, "article")} {drafts.length === 1 ? "is" : "are"} still a draft.{" "}
+                      {includeDrafts
+                        ? `${drafts.length === 1 ? "It" : "They"} will be published with the issue.`
+                        : `${drafts.length === 1 ? "It stays" : "They stay"} hidden until you publish ${drafts.length === 1 ? "it" : "them"}.`}
+                      <label className="mt-1.5 flex items-center gap-2 font-medium">
+                        <input
+                          type="checkbox"
+                          checked={includeDrafts}
+                          onChange={(e) => setIncludeDrafts(e.target.checked)}
+                        />
+                        Also publish the{" "}
+                        {drafts.length === 1 ? "draft article" : `${drafts.length} draft articles`}
+                      </label>
+                    </span>
+                  ) : null}
+                </span>
+                <span className="block text-xs">
+                  You can still publish: none of these stop it. Fix them now or later.
+                </span>
+              </span>
             ) : null}
           </span>
         }
@@ -407,6 +558,27 @@ export function IssueEditor({ issue }: { issue: IssueEditorData }) {
         confirmLabel="Move to trash"
         destructive
         onConfirm={() => runStatus("trash")}
+      />
+      <ConfirmDialog
+        open={confirm === "renumber"}
+        onOpenChange={(o) => !o && setConfirm(null)}
+        title="Change the number of a live issue?"
+        description={`Its address on the site changes from ${issue.publicPath} to ${issuePath(issue.volumeNumber, Number(form.issueNumber) || 0)}. Links people have saved keep working: the old address sends them to the new one.`}
+        confirmLabel="Change the number"
+        onConfirm={save}
+      />
+      <ConfirmDialog
+        open={confirm === "delete-forever"}
+        onOpenChange={(o) => !o && setConfirm(null)}
+        title={`Delete ${issue.label} forever?`}
+        description={
+          issue.trashedArticles > 0
+            ? `The issue and its ${plural(issue.trashedArticles, "trashed article")} are deleted for good, with their files' links and statistics. This can't be undone.`
+            : "The issue is deleted for good and its number becomes free again. This can't be undone."
+        }
+        confirmLabel="Delete forever"
+        destructive
+        onConfirm={deleteForever}
       />
     </div>
   );

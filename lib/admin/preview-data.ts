@@ -43,15 +43,18 @@ export async function previewIssueSummary(issueId: string): Promise<IssueSummary
   };
 }
 
+/** An article as the site will show it, plus its publishing state for the preview's notes. */
+export type PreviewArticle = ArticleSummary & { status: "draft" | "published" };
+
 export async function previewArticles(filter: {
   issueId?: string;
   articleId?: string;
-}): Promise<ArticleSummary[]> {
+}): Promise<PreviewArticle[]> {
   const supabase = await createSupabaseServerClient();
   let query = supabase
     .from("articles")
     .select(
-      "id, slug, title, abstract, first_page, last_page, published_at, issue_id, sort_order, pdf_file_id, docx_file_id, view_count, download_count, category:categories(name, slug), authors:article_authors(full_name, affiliation, orcid, email, show_email, position)",
+      "id, status, slug, title, abstract, first_page, last_page, published_at, issue_id, sort_order, pdf_file_id, docx_file_id, view_count, download_count, category:categories(name, slug), authors:article_authors(full_name, affiliation, orcid, email, show_email, position)",
     )
     .is("deleted_at", null)
     .order("sort_order");
@@ -60,6 +63,7 @@ export async function previewArticles(filter: {
   const { data } = await query;
   return (data ?? []).map((a) => ({
     id: a.id,
+    status: a.status,
     slug: a.slug,
     title: a.title,
     abstract: a.abstract,

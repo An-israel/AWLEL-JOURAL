@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { Suspense } from "react";
 import { ArticleRow } from "@/components/catalog/article-row";
 import { Breadcrumbs } from "@/components/catalog/breadcrumbs";
@@ -9,6 +9,7 @@ import { IssueCover } from "@/components/catalog/issue-cover";
 import { RichText } from "@/components/catalog/rich-text";
 import { JsonLd } from "@/components/seo/json-ld";
 import { getIssue, getPublishedIssues } from "@/lib/data/catalog";
+import { findIssueRedirect } from "@/lib/data/redirects";
 import { getSiteSettings } from "@/lib/data/site-settings";
 import { siteUrl } from "@/lib/env.public";
 import { issueLd } from "@/lib/seo/json-ld";
@@ -51,7 +52,13 @@ const dateFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "lo
 
 async function IssueContent({ params }: { params: Props["params"] }) {
   const [issue, settings] = await Promise.all([load(params), getSiteSettings()]);
-  if (!issue) notFound();
+  if (!issue) {
+    // A renumbered issue keeps its old address (item 74).
+    const p = await params;
+    const moved = await findIssueRedirect(p.volume, p.issue);
+    if (moved) permanentRedirect(moved);
+    notFound();
+  }
   const structured = issueLd(
     {
       name: settings.journalName,

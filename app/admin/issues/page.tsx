@@ -7,7 +7,7 @@ import { loadAdminIssues } from "@/lib/admin/issue-data";
 import { requireRole } from "@/lib/auth";
 import { STAFF_ROLES } from "@/lib/roles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { AddIssueButton, NewVolumeButton } from "./issues-toolbar";
+import { AddIssueButton, EditVolumeButton, NewVolumeButton } from "./issues-toolbar";
 
 export const metadata: Metadata = { title: "Volumes and Issues" };
 
@@ -18,7 +18,7 @@ async function Content() {
     loadAdminIssues(),
     supabase
       .from("volumes")
-      .select("id, volume_number, year")
+      .select("id, volume_number, year, version")
       .order("year", { ascending: false })
       .order("volume_number", { ascending: false }),
     supabase.from("articles").select("issue_id, status").is("deleted_at", null),
@@ -62,11 +62,23 @@ async function Content() {
                   <div key={v.id} className="mt-4 rounded-lg border border-line bg-white">
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
                       <p className="font-semibold">Volume {v.volume_number}</p>
-                      <AddIssueButton
-                        volumeId={v.id}
-                        volumeNumber={v.volume_number}
-                        nextIssue={Math.max(0, ...list.map((i) => i.issueNumber)) + 1}
-                      />
+                      <div className="flex flex-wrap gap-2">
+                        <EditVolumeButton
+                          volume={{
+                            id: v.id,
+                            volumeNumber: v.volume_number,
+                            year: v.year,
+                            version: v.version,
+                          }}
+                          issueCount={list.length}
+                          publishedCount={list.filter((i) => i.status === "published" && !i.deleted).length}
+                        />
+                        <AddIssueButton
+                          volumeId={v.id}
+                          volumeNumber={v.volume_number}
+                          nextIssue={Math.max(0, ...list.map((i) => i.issueNumber)) + 1}
+                        />
+                      </div>
                     </div>
                     {list.length === 0 ? (
                       <p className="px-4 py-4 text-sm text-ink-muted">No issues yet.</p>

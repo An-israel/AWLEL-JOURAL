@@ -1,14 +1,15 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
+import { ConfirmDialog, Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
 import { FieldError, Input, Label, NativeSelect } from "@/components/ui/input";
 import { toast } from "@/components/ui/toaster";
 import { MONTHS } from "@/lib/issue-label";
-import { createIssue, createVolume } from "./actions";
+import { createIssue, createVolume, deleteVolume, updateVolume } from "./actions";
+import { LEGACY_NUMBER_HINT } from "./legacy-hint";
 
 export function NewVolumeButton({
   suggestedNumber,
@@ -163,7 +164,7 @@ export function AddIssueButton({
               </NativeSelect>
             </div>
             <div>
-              <Label htmlFor="iss-legacy">Legacy no.</Label>
+              <Label htmlFor="iss-legacy">Old number</Label>
               <Input
                 id="iss-legacy"
                 name="legacyNumber"
@@ -171,9 +172,13 @@ export function AddIssueButton({
                 min={1}
                 placeholder="e.g. 19"
                 className="mt-1.5"
+                aria-describedby="iss-legacy-hint"
               />
             </div>
           </div>
+          <p id="iss-legacy-hint" className="-mt-2 text-xs text-ink-muted">
+            Old number (optional): {LEGACY_NUMBER_HINT}
+          </p>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
@@ -185,5 +190,148 @@ export function AddIssueButton({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Change a volume's number or year, or delete it while it has no issues
+ * (item 73). Issues already live keep their old addresses (item 74).
+ */
+export function EditVolumeButton({
+  volume,
+  issueCount,
+  publishedCount,
+}: {
+  volume: { id: string; volumeNumber: number; year: number; version: number };
+  issueCount: number;
+  publishedCount: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [pending, start] = useTransition();
+  const router = useRouter();
+  return (
+    <>
+      <Dialog
+        open={open}
+        onOpenChange={(o) => {
+          setOpen(o);
+          setErrors({});
+        }}
+      >
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => setOpen(true)}
+          aria-label={`Edit Volume ${volume.volumeNumber}`}
+        >
+          <Pencil aria-hidden /> Edit
+        </Button>
+        <DialogContent>
+          <DialogHeader
+            title={`Edit Volume ${volume.volumeNumber}`}
+            description={
+              publishedCount > 0
+                ? "Changing the number changes the web address of its published issues. Their old addresses keep working and send readers to the new ones."
+                : undefined
+            }
+          />
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const fd = new FormData(e.currentTarget);
+              start(async () => {
+                const r = await updateVolume({
+                  id: volume.id,
+                  expectedVersion: volume.version,
+                  volumeNumber: String(fd.get("volumeNumber")),
+                  year: String(fd.get("year")),
+                });
+                if (!r.ok) {
+                  setErrors(r.fieldErrors ?? {});
+                  return void toast.error(r.message);
+                }
+                toast.success(r.message ?? "Saved");
+                setOpen(false);
+                router.refresh();
+              });
+            }}
+          >
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor={`vol-${volume.id}-number`}>Volume number</Label>
+                <Input
+                  id={`vol-${volume.id}-number`}
+                  name="volumeNumber"
+                  type="number"
+                  min={1}
+                  defaultValue={volume.volumeNumber}
+                  className="mt-1.5"
+                  aria-describedby={`vol-${volume.id}-number-error`}
+                />
+                <FieldError id={`vol-${volume.id}-number-error`}>{errors.volumeNumber}</FieldError>
+              </div>
+              <div>
+                <Label htmlFor={`vol-${volume.id}-year`}>Year</Label>
+                <Input
+                  id={`vol-${volume.id}-year`}
+                  name="year"
+                  type="number"
+                  min={1990}
+                  defaultValue={volume.year}
+                  className="mt-1.5"
+                  aria-describedby={`vol-${volume.id}-year-error`}
+                />
+                <FieldError id={`vol-${volume.id}-year-error`}>{errors.year}</FieldError>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              {issueCount === 0 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-coral-ink"
+                  disabled={pending}
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  Delete volume
+                </Button>
+              ) : (
+                <span className="text-xs text-ink-muted">
+                  A volume can be deleted once it has no issues (trashed ones included).
+                </span>
+              )}
+              <span className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={pending}>
+                  Save volume
+                </Button>
+              </span>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={`Delete Volume ${volume.volumeNumber}?`}
+        description="It has no issues, so nothing else is affected. You can create it again later."
+        confirmLabel="Delete volume"
+        destructive
+        onConfirm={() =>
+          start(async () => {
+            const r = await deleteVolume(volume.id);
+            if (!r.ok) return void toast.error(r.message);
+            toast.success(r.message ?? "Deleted");
+            setOpen(false);
+            router.refresh();
+          })
+        }
+      />
+    </>
   );
 }

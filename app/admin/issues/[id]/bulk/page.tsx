@@ -21,7 +21,7 @@ async function Content({ params }: { params: Props["params"] }) {
     supabase
       .from("articles")
       .select(
-        "id, version, title, first_page, last_page, category_id, citation_style, authors:article_authors(full_name, position)",
+        "id, version, title, first_page, last_page, category_id, citation_style, pdf_file_id, docx_file_id, authors:article_authors(full_name, position)",
       )
       .eq("issue_id", id)
       .is("deleted_at", null)
@@ -52,6 +52,8 @@ async function Content({ params }: { params: Props["params"] }) {
           lastPage: a.last_page,
           categoryId: a.category_id,
           citationStyle: a.citation_style,
+          hasPdf: Boolean(a.pdf_file_id),
+          hasDocx: Boolean(a.docx_file_id),
           authors: [...a.authors].sort((x, y) => x.position - y.position).map((x) => x.full_name),
         }))}
       />

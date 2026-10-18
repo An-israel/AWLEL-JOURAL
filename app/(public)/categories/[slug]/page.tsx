@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { DEFAULT_OG_IMAGE } from "@/lib/site";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { Suspense } from "react";
 import { ArticleRow } from "@/components/catalog/article-row";
 import { Breadcrumbs } from "@/components/catalog/breadcrumbs";
 import { categoryTint } from "@/components/catalog/category-tag";
 import { SortableList } from "@/components/catalog/sortable-list";
 import { getCategoriesWithCounts, getCategoryArticles, getPublishedIssues } from "@/lib/data/catalog";
+import { findCategoryRedirect } from "@/lib/data/redirects";
 
 type Props = PageProps<"/categories/[slug]">;
 
@@ -41,7 +42,12 @@ async function CategoryContent({ params }: { params: Props["params"] }) {
     getPublishedIssues(),
     getCategoriesWithCounts(),
   ]);
-  if (!data) notFound();
+  if (!data) {
+    // A category with a new web address keeps its old one (item 81).
+    const moved = await findCategoryRedirect(slug);
+    if (moved) permanentRedirect(`/categories/${moved}`);
+    notFound();
+  }
   const issueById = new Map(issues.map((i) => [i.id, i]));
 
   return (

@@ -11,8 +11,16 @@ const STAFF = ["super_admin", "editor"] as const;
 const conflict = () => fromDbError({ code: "AW409", message: "" });
 
 const volumeSchema = z.object({
-  volumeNumber: z.coerce.number().int().min(1, "Volume numbers start at 1.").max(9999),
-  year: z.coerce.number().int().min(1990, "Enter a year from 1990.").max(2200),
+  volumeNumber: z.coerce
+    .number("Enter the volume number.")
+    .int("Use a whole number.")
+    .min(1, "Volume numbers start at 1.")
+    .max(9999, "Use a number up to 9999."),
+  year: z.coerce
+    .number("Enter the year.")
+    .int("Enter a year such as 2025.")
+    .min(1990, "Enter a year from 1990.")
+    .max(2200, "Enter a year before 2200."),
 });
 
 /** Volume number and year are entered separately: older years may not follow the pattern. */
@@ -40,6 +48,36 @@ export async function createVolume(
   return { ok: true, message: `Volume ${parsed.data.volumeNumber} created.`, data: { id: data.id } };
 }
 
+const volumeUpdateSchema = volumeSchema.extend({ id: z.uuid(), expectedVersion: z.number().int() });
+
+/** Changes a volume's number or year (item 73). Live issues keep their old addresses (item 74). */
+export async function updateVolume(input: z.input<typeof volumeUpdateSchema>): Promise<ActionResult> {
+  if (!(await userWithRole(STAFF))) return forbiddenResult;
+  const parsed = volumeUpdateSchema.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("volumes")
+    .update({ volume_number: parsed.data.volumeNumber, year: parsed.data.year })
+    .eq("id", parsed.data.id)
+    .eq("version", parsed.data.expectedVersion)
+    .select("id")
+    .maybeSingle();
+  if (error) {
+    return error.code === "23505"
+      ? {
+          ok: false,
+          message: `There is already a Volume ${parsed.data.volumeNumber}.`,
+          fieldErrors: { volumeNumber: "Already exists" },
+        }
+      : fromDbError(error, "volume");
+  }
+  if (!data) return conflict();
+  expireCatalog({ categories: true });
+  return { ok: true, message: `Volume ${parsed.data.volumeNumber} saved.` };
+}
+
+/** Only a volume with no issues at all (trashed ones included) can be deleted. */
 export async function deleteVolume(id: string): Promise<ActionResult> {
   if (!(await userWithRole(STAFF))) return forbiddenResult;
   if (!z.uuid().safeParse(id).success) return { ok: false, message: "Invalid request." };
@@ -49,17 +87,51 @@ export async function deleteVolume(id: string): Promise<ActionResult> {
     .select("id", { count: "exact", head: true })
     .eq("volume_id", id);
   if (count)
-    return { ok: false, message: "Only an empty volume can be deleted. Move or delete its issues first." };
+    return {
+      ok: false,
+      message:
+        "Only an empty volume can be deleted. Delete its issues forever first (issues in the trash count too).",
+    };
   const { error } = await supabase.from("volumes").delete().eq("id", id);
   if (error) return fromDbError(error, "volume");
+  expireCatalog();
   return { ok: true, message: "Volume deleted." };
 }
 
+/**
+ * The "number already used" message. A trashed issue still holds its number,
+ * so say so, and how to free it (item 73).
+ */
+async function numberTakenMessage(volumeId: string, issueNumber: number, exceptId?: string) {
+  const supabase = await createSupabaseServerClient();
+  let query = supabase
+    .from("issues")
+    .select("deleted_at")
+    .eq("volume_id", volumeId)
+    .eq("issue_number", issueNumber);
+  if (exceptId) query = query.neq("id", exceptId);
+  const { data } = await query.maybeSingle();
+  return data?.deleted_at
+    ? `Issue ${issueNumber} already exists in this volume (it's in the trash — restore it or delete it forever).`
+    : `Issue ${issueNumber} already exists in this volume.`;
+}
+
+const issueNumber = z.coerce
+  .number("Enter the issue number.")
+  .int("Use a whole number.")
+  .min(1, "Issue numbers start at 1.")
+  .max(99, "Use a number up to 99.");
+
 const issueCreateSchema = z.object({
   volumeId: z.uuid(),
-  issueNumber: z.coerce.number().int().min(1).max(99),
-  month: z.coerce.number().int().min(1).max(12).optional(),
-  legacyNumber: z.coerce.number().int().min(1).max(9999).optional(),
+  issueNumber,
+  month: z.coerce.number().int().min(1, "Choose a month.").max(12, "Choose a month.").optional(),
+  legacyNumber: z.coerce
+    .number("Enter a number, or leave it empty.")
+    .int("Use a whole number.")
+    .min(1, "Use a number from 1.")
+    .max(9999, "Use a number up to 9999.")
+    .optional(),
 });
 
 export async function createIssue(
@@ -83,7 +155,7 @@ export async function createIssue(
     return error.code === "23505"
       ? {
           ok: false,
-          message: `Issue ${parsed.data.issueNumber} already exists in this volume.`,
+          message: await numberTakenMessage(parsed.data.volumeId, parsed.data.issueNumber),
           fieldErrors: { issueNumber: "Already exists" },
         }
       : fromDbError(error, "issue");
@@ -94,19 +166,24 @@ export async function createIssue(
 const optionalInt = (min: number, max: number) =>
   z.preprocess(
     (v) => (v === "" || v === null || v === undefined ? null : v),
-    z.coerce.number().int().min(min).max(max).nullable(),
+    z.coerce
+      .number("Enter a number, or leave it empty.")
+      .int("Use a whole number.")
+      .min(min, `Use a number from ${min}.`)
+      .max(max, `Use a number up to ${max}.`)
+      .nullable(),
   );
 
 const issueSchema = z.object({
   id: z.uuid(),
   expectedVersion: z.number().int(),
-  issueNumber: z.coerce.number().int().min(1).max(99),
+  issueNumber,
   month: optionalInt(1, 12),
   legacyNumber: optionalInt(1, 9999),
-  title: z.string().trim().max(300).optional(),
-  editorial: z.string().max(100_000).optional(),
-  coverAlt: z.string().trim().max(300).optional(),
-  publishedAt: z.union([z.literal(""), z.iso.date()]).optional(),
+  title: z.string().trim().max(300, "Keep the title under 300 characters.").optional(),
+  editorial: z.string().max(100_000, "The editorial is too long.").optional(),
+  coverAlt: z.string().trim().max(300, "Keep the cover description under 300 characters.").optional(),
+  publishedAt: z.union([z.literal(""), z.iso.date("Choose a date.")]).optional(),
 });
 
 export async function saveIssue(
@@ -120,6 +197,8 @@ export async function saveIssue(
   const { data, error } = await supabase
     .from("issues")
     .update({
+      // A published issue keeps its date when this is empty (trigger, item 68),
+      // and a renumbered live issue keeps its old address (trigger, item 74).
       issue_number: d.issueNumber,
       month: d.month,
       legacy_number: d.legacyNumber,
@@ -133,13 +212,15 @@ export async function saveIssue(
     .select("version")
     .maybeSingle();
   if (error) {
-    return error.code === "23505"
-      ? {
-          ok: false,
-          message: "Another issue in this volume already has that number.",
-          fieldErrors: { issueNumber: "Already used" },
-        }
-      : fromDbError(error, "issue");
+    if (error.code !== "23505") return fromDbError(error, "issue");
+    const { data: current } = await supabase.from("issues").select("volume_id").eq("id", d.id).maybeSingle();
+    return {
+      ok: false,
+      message: current
+        ? await numberTakenMessage(current.volume_id, d.issueNumber, d.id)
+        : "Another issue in this volume already has that number.",
+      fieldErrors: { issueNumber: "Already used" },
+    };
   }
   if (!data) return conflict();
   expireCatalog({ issueIds: [d.id] });
@@ -151,6 +232,8 @@ export async function setIssueStatus(input: {
   expectedVersion: number;
   status: "draft" | "published";
   includeArticles?: boolean;
+  /** Publishing an issue with no articles needs this explicit confirmation (item 69). */
+  allowEmpty?: boolean;
 }): Promise<ActionResult<{ version: number }>> {
   if (!(await userWithRole(STAFF))) return forbiddenResult;
   const parsed = z
@@ -159,10 +242,24 @@ export async function setIssueStatus(input: {
       expectedVersion: z.number().int(),
       status: z.enum(["draft", "published"]),
       includeArticles: z.boolean().optional(),
+      allowEmpty: z.boolean().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return { ok: false, message: "Invalid request." };
   const supabase = await createSupabaseServerClient();
+  if (parsed.data.status === "published" && !parsed.data.allowEmpty) {
+    const { count } = await supabase
+      .from("articles")
+      .select("id", { count: "exact", head: true })
+      .eq("issue_id", parsed.data.id)
+      .is("deleted_at", null);
+    if (!count)
+      return {
+        ok: false,
+        message:
+          "This issue has no articles. Tick “Publish it anyway” if you really want to publish it empty.",
+      };
+  }
   const { data, error } = await supabase.rpc("set_issue_status", {
     p_issue_id: parsed.data.id,
     p_expected_version: parsed.data.expectedVersion,
@@ -215,6 +312,19 @@ export async function setIssueDeleted(input: {
     message: parsed.data.deleted ? "Issue moved to trash. You can restore it." : "Issue restored as a draft.",
     data: { version: data.version },
   };
+}
+
+/** Deletes a trashed issue for good, with its trashed articles (Super Admin, item 73). */
+export async function deleteIssueForever(id: string): Promise<ActionResult> {
+  if (!(await userWithRole(["super_admin"]))) return forbiddenResult;
+  if (!z.uuid().safeParse(id).success) return { ok: false, message: "Invalid request." };
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("delete_issue_forever", { p_issue_id: id });
+  if (error) {
+    return error.code === "AW422" ? { ok: false, message: error.message } : fromDbError(error, "issue");
+  }
+  expireCatalog({ issueIds: [id], categories: true });
+  return { ok: true, message: "Issue deleted forever. Its number is free again." };
 }
 
 export async function reorderIssueArticles(input: { issueId: string; ids: string[] }): Promise<ActionResult> {
