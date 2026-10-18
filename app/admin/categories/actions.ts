@@ -11,12 +11,18 @@ const STAFF = ["super_admin", "editor"] as const;
 const categorySchema = z.object({
   id: z.uuid().optional(),
   expectedVersion: z.number().int().optional(),
-  name: z.string().trim().min(2, "Enter a name.").max(120),
-  slug: z
-    .string()
+  name: z
+    .string("Enter a name.")
     .trim()
+    .min(2, "Enter a name of at least 2 characters.")
+    .max(120, "Keep the name under 120 characters."),
+  slug: z
+    .string("Enter a web address.")
+    .trim()
+    .min(1, "Enter a web address.")
+    .max(80, "Keep the web address under 80 characters.")
     .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Use lowercase letters, numbers and hyphens."),
-  description: z.string().trim().max(600).optional(),
+  description: z.string().trim().max(600, "Keep the description under 600 characters.").optional(),
 });
 
 export async function saveCategory(input: z.input<typeof categorySchema>): Promise<ActionResult> {

@@ -1,11 +1,13 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, History } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { ConflictBanner } from "@/components/admin/conflict-banner";
 import { RichTextEditor } from "@/components/admin/rich-text-editor";
 import { useUnsavedChanges } from "@/components/admin/use-unsaved-changes";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/dialog";
 import { FieldError, Input, Label, Textarea } from "@/components/ui/input";
 import { toast } from "@/components/ui/toaster";
 import { savePage } from "../actions";
@@ -19,7 +21,20 @@ export interface PageEditorData {
   needsReview: boolean;
 }
 
-export function PageEditor({ page }: { page: PageEditorData }) {
+export interface PageRevision {
+  id: string;
+  title: string;
+  content: string;
+  metaDescription: string;
+  savedAt: string;
+  savedBy: string | null;
+}
+
+const when = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });
+
+export function PageEditor({ page, revisions }: { page: PageEditorData; revisions: PageRevision[] }) {
+  const router = useRouter();
+  const [restoring, setRestoring] = useState<PageRevision | null>(null);
   const [version, setVersion] = useState(page.version);
   const [form, setForm] = useState(page);
   const [dirty, setDirty] = useState(false);
@@ -114,6 +129,8 @@ export function PageEditor({ page }: { page: PageEditorData }) {
               setErrors({});
               setDirty(false);
               toast.success(r.message ?? "Saved");
+              // Shows the new version in the History panel.
+              router.refresh();
             })
           }
         >
@@ -141,6 +158,69 @@ export function PageEditor({ page }: { page: PageEditorData }) {
           View on site <ExternalLink aria-hidden className="size-3.5" />
         </a>
       </div>
+
+      <section aria-labelledby="history-title" className="rounded-lg border border-line bg-white p-5">
+        <h2 id="history-title" className="flex items-center gap-2 text-lg font-semibold">
+          <History aria-hidden className="size-5" /> History
+        </h2>
+        <p className="mt-1 text-sm text-ink-muted">
+          Every save is kept. Restoring a version puts it in the editor above; nothing changes on the site
+          until you press Save and publish.
+        </p>
+        {revisions.length === 0 ? (
+          <p className="mt-3 text-sm text-ink-muted">
+            No earlier versions yet. They appear after the first save.
+          </p>
+        ) : (
+          <ol className="mt-3 divide-y divide-line rounded-md border border-line">
+            {revisions.map((r, i) => (
+              <li
+                key={r.id}
+                className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5 text-sm"
+              >
+                <span className="min-w-0">
+                  <time dateTime={r.savedAt} className="font-medium text-ink">
+                    {when.format(new Date(r.savedAt))}
+                  </time>{" "}
+                  <span className="text-ink-muted">
+                    {r.savedBy ? `by ${r.savedBy}` : ""}
+                    {i === 0 ? " · current version" : ""} · {r.title}
+                  </span>
+                </span>
+                {i > 0 ? (
+                  <Button size="sm" variant="outline" onClick={() => setRestoring(r)}>
+                    Restore this version
+                  </Button>
+                ) : null}
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+
+      <ConfirmDialog
+        open={restoring !== null}
+        onOpenChange={(o) => !o && setRestoring(null)}
+        title="Restore this version?"
+        description={
+          dirty
+            ? "Its title and text replace what is in the editor now, including your unsaved changes. The site doesn't change until you press Save and publish."
+            : "Its title and text go into the editor. The site doesn't change until you press Save and publish."
+        }
+        confirmLabel="Restore into the editor"
+        onConfirm={() => {
+          if (!restoring) return;
+          setForm((f) => ({
+            ...f,
+            title: restoring.title,
+            content: restoring.content,
+            metaDescription: restoring.metaDescription,
+          }));
+          setDirty(true);
+          setRestoring(null);
+          toast.success("Version restored into the editor. Press Save and publish to put it live.");
+        }}
+      />
     </div>
   );
 }

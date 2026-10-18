@@ -6,6 +6,7 @@ import { AdminPageHeader, EmptyState } from "@/components/admin/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/input";
+import { ACTION_BADGE, ACTIONS, describeDiff, ENTITIES } from "@/lib/admin/audit-labels";
 import { requireRole } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -13,43 +14,6 @@ export const metadata: Metadata = { title: "Audit Log" };
 
 const PAGE_SIZE = 50;
 const when = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });
-
-// What the audit trigger records (migration 1) plus queue actions (migration 10).
-const ACTIONS: Record<string, string> = {
-  publish: "Published",
-  unpublish: "Unpublished",
-  status_change: "Status changed",
-  soft_delete: "Moved to trash",
-  restore: "Restored",
-  delete: "Deleted",
-  role_change: "Role or access changed",
-  file_replace: "File replaced",
-  dead_letter_retried: "Failed job retried",
-  dead_letter_discarded: "Failed job discarded",
-};
-
-const ENTITIES: Record<string, { label: string; href?: (id: string) => string }> = {
-  issues: { label: "Issue", href: (id) => `/admin/issues/${id}` },
-  articles: { label: "Article", href: (id) => `/admin/articles/${id}` },
-  volumes: { label: "Volume", href: () => "/admin/issues" },
-  categories: { label: "Category", href: () => "/admin/categories" },
-  submissions: { label: "Submission", href: (id) => `/admin/submissions/${id}` },
-  profiles: { label: "User", href: () => "/admin/users" },
-  pages: { label: "Page", href: (id) => `/admin/pages/${id}` },
-  editorial_board_members: { label: "Board member", href: (id) => `/admin/editorial-board/${id}` },
-  site_settings: { label: "Settings", href: () => "/admin/settings" },
-  feature_flags: { label: "Feature switch", href: () => "/admin/settings" },
-  dead_letter_jobs: { label: "Failed job", href: () => "/admin/operations" },
-};
-
-const ACTION_BADGE: Record<string, "default" | "gold" | "coral" | "green" | "muted"> = {
-  publish: "green",
-  unpublish: "gold",
-  delete: "coral",
-  soft_delete: "coral",
-  role_change: "gold",
-  file_replace: "default",
-};
 
 const filtersSchema = z.object({
   action: z
@@ -94,7 +58,7 @@ async function Content({ searchParams }: { searchParams: Props["searchParams"] }
   const ids = (type: string) => [
     ...new Set(data.filter((r) => r.entity_type === type && r.entity_id).map((r) => r.entity_id!)),
   ];
-  const [articles, issues, people] = await Promise.all([
+  const [articles, issues, people, pageRows, categories] = await Promise.all([
     ids("articles").length
       ? supabase.from("articles").select("id, title").in("id", ids("articles"))
       : Promise.resolve({ data: [] }),
@@ -107,12 +71,25 @@ async function Content({ searchParams }: { searchParams: Props["searchParams"] }
     ids("profiles").length
       ? supabase.from("profiles").select("id, full_name").in("id", ids("profiles"))
       : Promise.resolve({ data: [] }),
+    ids("pages").length
+      ? supabase.from("pages").select("id, slug, title").in("id", ids("pages"))
+      : Promise.resolve({ data: [] }),
+    ids("categories").length
+      ? supabase.from("categories").select("id, name").in("id", ids("categories"))
+      : Promise.resolve({ data: [] }),
   ]);
   const names = new Map<string, string>();
   for (const a of articles.data ?? []) names.set(a.id, a.title);
   for (const i of issues.data ?? [])
     names.set(i.id, `Volume ${i.volume?.volume_number}, Issue ${i.issue_number} (${i.volume?.year})`);
   for (const p of people.data ?? []) names.set(p.id, p.full_name || "Unnamed user");
+  for (const c of categories.data ?? []) names.set(c.id, c.name);
+  // The page editor's address uses the slug, not the id.
+  const pageSlugs = new Map<string, string>();
+  for (const p of pageRows.data ?? []) {
+    names.set(p.id, p.title);
+    pageSlugs.set(p.id, p.slug);
+  }
 
   const pages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
   const href = (p: number) => {
@@ -173,7 +150,7 @@ async function Content({ searchParams }: { searchParams: Props["searchParams"] }
       <p className="mt-6 mb-3 text-sm text-ink-muted">{(count ?? 0).toLocaleString("en")} entries</p>
       {data.length === 0 ? (
         <EmptyState title="Nothing recorded">
-          Publishing, unpublishing, deletions, role changes and file replacements are recorded here.
+          Publishing, unpublishing, edits, deletions, role changes and file replacements are recorded here.
         </EmptyState>
       ) : (
         <ol
@@ -195,8 +172,10 @@ async function Content({ searchParams }: { searchParams: Props["searchParams"] }
                 )
               : "";
             const name = (row.entity_id && names.get(row.entity_id)) || kept || null;
-            const link =
-              entity?.href && row.entity_id && row.action !== "delete" ? entity.href(row.entity_id) : null;
+            const target =
+              row.entity_type === "pages" && row.entity_id ? pageSlugs.get(row.entity_id) : row.entity_id;
+            const link = entity?.href && target && row.action !== "delete" ? entity.href(target) : null;
+            const details = describeDiff(row.action, diff);
             return (
               <li key={row.id} className="grid gap-2 px-4 py-3 text-sm sm:grid-cols-[11rem_1fr]">
                 <time dateTime={row.created_at} className="text-ink-muted">
@@ -222,12 +201,23 @@ async function Content({ searchParams }: { searchParams: Props["searchParams"] }
                       {row.actor?.full_name || row.actor?.email || "the system"}
                     </span>
                   </p>
-                  {Object.keys(diff ?? {}).length ? (
+                  {details.length ? (
                     <details className="mt-1">
                       <summary className="cursor-pointer text-xs font-medium text-navy">Details</summary>
-                      <pre className="mt-1 max-h-60 overflow-auto rounded bg-paper p-2 text-xs whitespace-pre-wrap">
-                        {JSON.stringify(diff, null, 2)}
-                      </pre>
+                      <ul className="mt-1 space-y-0.5 rounded bg-paper p-2 text-xs">
+                        {details.map((d, i) => (
+                          <li key={i} className="break-words">
+                            <span className="font-medium text-ink">{d.field}:</span>{" "}
+                            {d.from !== undefined ? (
+                              <>
+                                {d.from} <span aria-label="changed to">→</span> {d.to}
+                              </>
+                            ) : (
+                              d.to
+                            )}
+                          </li>
+                        ))}
+                      </ul>
                     </details>
                   ) : null}
                 </div>
@@ -255,7 +245,7 @@ export default function AuditLogPage({ searchParams }: Props) {
       <AdminPageHeader
         title="Audit Log"
         crumbs={[{ label: "Audit Log" }]}
-        description="Who published, unpublished, deleted, changed roles or replaced files, and when. Entries can't be edited or removed."
+        description="Who published, unpublished, edited, deleted, changed roles or replaced files, and when. Entries can't be edited or removed."
       />
       <Suspense fallback={<div className="mt-8 h-96 animate-pulse rounded-lg bg-line" aria-busy="true" />}>
         <Content searchParams={searchParams} />
