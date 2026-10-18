@@ -80,6 +80,27 @@ test("editor screens it and assigns a reviewer", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
   await expect(page.getByText(authorName).first()).toBeVisible();
 
+  // Only valid next statuses are offered (item 56).
+  const options = await page.getByLabel("New status").locator("option").allTextContents();
+  expect(options).not.toContain("Published");
+  expect(options).not.toContain("Accepted");
+
+  // A note without a status change is saved and emailed with its own key (item 55).
+  await page.getByLabel("Note", { exact: true }).fill("Thank you. We are reading your manuscript now.");
+  await page.getByRole("button", { name: "Add note" }).click();
+  await expect(page.getByText("Note added to the author's timeline and emailed to them.")).toBeVisible();
+  const { data: notes } = await adminClient()
+    .from("submission_events")
+    .select("id")
+    .eq("submission_id", submissionId)
+    .eq("message", "Thank you. We are reading your manuscript now.");
+  expect(notes).toHaveLength(1);
+  const { data: noteJobs } = await adminClient()
+    .from("jobs")
+    .select("id")
+    .eq("idempotency_key", `note:${notes![0].id}`);
+  expect(noteJobs).toHaveLength(1);
+
   await page.getByLabel("New status").selectOption("under_review");
   await page
     .getByLabel("Message to the author (optional)")
@@ -102,6 +123,9 @@ test("reviewer sees a blinded manuscript and submits a review", async ({ page })
   const body = await page.getByRole("main").innerText();
   expect(body).not.toContain("Secretname");
   expect(body).not.toContain("Coauthor");
+  // Accept the invitation first (item 60).
+  await page.getByRole("button", { name: "Accept", exact: true }).click();
+  await expect(page.getByText("Thank you for agreeing to review.")).toBeVisible();
   // The manuscript downloads under a neutral name.
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download" }).click();
@@ -112,17 +136,34 @@ test("reviewer sees a blinded manuscript and submits a review", async ({ page })
   await page.keyboard.type(
     "A persuasive argument. The theoretical framework section should engage more recent work on silence and testimony.",
   );
+  await page
+    .getByLabel("Confidential comments to the editors (optional)")
+    .fill("Confidential: the argument overlaps with an earlier conference paper.");
   await page.getByRole("button", { name: "Submit review" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Submit review" }).click();
   await expect(page.getByText("Review submitted. Thank you!")).toBeVisible();
   await expect(page.getByText("Your review")).toBeVisible();
 });
 
+test("editor shares the review with the author, anonymously", async ({ page }) => {
+  await signIn(page, editor.email, TEST_PASSWORD);
+  await page.goto(`/admin/submissions/${submissionId}`);
+  await expect(page.getByText("Confidential, for the editors only")).toBeVisible();
+  await expect(page.getByText(/overlaps with an earlier conference paper/)).toBeVisible();
+  await page.getByRole("button", { name: "Share with the author" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Share" }).click();
+  await expect(page.getByText(/The comments are on the author's timeline/)).toBeVisible();
+});
+
 test("author sees progress but never the reviewer", async ({ page }) => {
   await signIn(page, author.email, TEST_PASSWORD);
   await page.goto(`/account/submissions/${submissionId}`);
   await expect(page.getByText("Your manuscript has been sent for peer review.")).toBeVisible();
-  await expect(page.getByRole("main")).not.toContainText("Rita Reviewer");
+  await expect(page.getByText("Thank you. We are reading your manuscript now.")).toBeVisible();
+  await expect(page.getByText(/Comments from Reviewer 1 \(review round 1\)/)).toBeVisible();
+  const main = page.getByRole("main");
+  await expect(main).not.toContainText("Rita Reviewer");
+  await expect(main).not.toContainText("conference paper");
 });
 
 test("editor reads the review, accepts and creates the article", async ({ page }) => {

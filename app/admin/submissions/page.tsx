@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { z } from "zod";
 import { AdminPageHeader, EmptyState } from "@/components/admin/page-header";
-import { StatusBadge } from "@/components/submissions/status-badge";
+import { isUnfinished, StatusBadge } from "@/components/submissions/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input, NativeSelect } from "@/components/ui/input";
 import { Table, TBody, Td, Th, THead, Tr } from "@/components/ui/table";
@@ -19,7 +19,7 @@ const date = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" });
 const filtersSchema = z.object({
   q: z.string().trim().max(200).optional().catch(undefined),
   status: z
-    .enum([...SUBMISSION_STATUSES, "open"])
+    .enum([...SUBMISSION_STATUSES, "open", "unfinished"])
     .optional()
     .catch(undefined),
   category: z.uuid().optional().catch(undefined),
@@ -39,13 +39,20 @@ async function Content({ searchParams }: { searchParams: Props["searchParams"] }
   let query = supabase
     .from("submissions")
     .select(
-      "id, title, status, created_at, category:categories(name), author:profiles!submissions_author_id_fkey(full_name), files:submission_files(kind), reviews:review_assignments(status)",
+      "id, title, status, created_at, finalised_at, category:categories(name), author:profiles!submissions_author_id_fkey(full_name), reviews:review_assignments(status)",
       { count: "exact" },
     )
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
-  query = status === "open" ? query.not("status", "in", "(rejected,published)") : query.eq("status", status);
+  // Unfinished submissions (no Word manuscript yet, item 51) stay out of the
+  // queue and the counts unless asked for.
+  query =
+    status === "unfinished"
+      ? query.is("finalised_at", null).eq("status", "submitted")
+      : status === "open"
+        ? query.not("status", "in", "(rejected,published,withdrawn)").not("finalised_at", "is", null)
+        : query.eq("status", status).not("finalised_at", "is", null);
   if (f.category) query = query.eq("category_id", f.category);
   if (f.q) {
     const term = f.q.replace(/[%,()*\\]/g, " ").trim();
@@ -87,6 +94,7 @@ async function Content({ searchParams }: { searchParams: Props["searchParams"] }
                 {STATUS_LABELS[s]}
               </option>
             ))}
+            <option value="unfinished">Not finished by the author</option>
           </NativeSelect>
         </div>
         <div>
@@ -126,7 +134,7 @@ async function Content({ searchParams }: { searchParams: Props["searchParams"] }
             {data.map((s) => {
               const active = s.reviews.filter((r) => r.status !== "withdrawn");
               const done = active.filter((r) => r.status === "submitted").length;
-              const hasManuscript = s.files.some((file) => file.kind === "original");
+              const unfinished = isUnfinished(s);
               return (
                 <Tr key={s.id}>
                   <Td>
@@ -135,14 +143,12 @@ async function Content({ searchParams }: { searchParams: Props["searchParams"] }
                     </Link>
                     <p className="text-xs text-ink-muted">
                       {s.author?.full_name ?? "—"}
-                      {!hasManuscript ? (
-                        <span className="ml-2 text-coral-ink">· no manuscript file</span>
-                      ) : null}
+                      {unfinished ? <span className="ml-2 text-coral-ink">· no manuscript yet</span> : null}
                     </p>
                   </Td>
                   <Td className="hidden text-ink-muted lg:table-cell">{s.category?.name ?? "—"}</Td>
                   <Td>
-                    <StatusBadge status={s.status} />
+                    <StatusBadge status={s.status} unfinished={unfinished} />
                   </Td>
                   <Td className="hidden text-ink-muted md:table-cell">
                     {active.length ? `${done} of ${active.length}` : "—"}

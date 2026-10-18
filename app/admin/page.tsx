@@ -55,7 +55,8 @@ async function Stats({ searchParams }: { searchParams: Props["searchParams"] }) 
         supabase
           .from("submissions")
           .select("id", { count: "exact", head: true })
-          .not("status", "in", "(rejected,published)")
+          .not("status", "in", "(rejected,published,withdrawn)")
+          .not("finalised_at", "is", null)
           .is("deleted_at", null),
       ),
       count(
@@ -78,7 +79,7 @@ async function Stats({ searchParams }: { searchParams: Props["searchParams"] }) 
             .order("created_at", { ascending: false })
             .limit(8)
         : Promise.resolve({ data: null }),
-      supabase.from("submissions").select("status").is("deleted_at", null),
+      supabase.from("submissions").select("status").is("deleted_at", null).not("finalised_at", "is", null),
       getAnalytics(range),
     ]);
 

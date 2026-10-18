@@ -5,6 +5,7 @@ import { userWithRole } from "@/lib/auth";
 import { fromDbError, forbiddenResult, invalid, type ActionResult } from "@/lib/admin/result";
 import { expireCatalog } from "@/lib/admin/revalidate";
 import { sanitizeRichText } from "@/lib/sanitize";
+import { notifyPublishedSubmissions } from "@/lib/submissions/published";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { articleSchema, type ArticleInput } from "./schema";
 
@@ -104,6 +105,7 @@ export async function setArticleStatus(
     .maybeSingle();
   if (error) return fromDbError(error, "article");
   if (!data) return conflict();
+  if (parsed.data.status === "published") await notifyPublishedSubmissions();
 
   const { data: issue } = await supabase
     .from("issues")

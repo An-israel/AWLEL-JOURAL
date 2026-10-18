@@ -1,8 +1,10 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import type { ReactNode } from "react";
+import { useActionState, type ReactNode } from "react";
+import { Button } from "@/components/ui/button";
 import { FieldError, Input, Label } from "@/components/ui/input";
+import { resendConfirmation } from "./actions";
 import type { FormState } from "./schemas";
 
 export function AuthField({
@@ -69,15 +71,49 @@ export function NextField() {
   return <input type="hidden" name="next" value={next} />;
 }
 
+/** Messages for /login?error=… set by the auth callback and /auth/confirm. */
+export const LINK_ERRORS: Record<string, string> = {
+  link: "That link is invalid or has expired. Please request a new one.",
+  expired:
+    "That link has expired or has already been used. If you were confirming your email, try signing in: it may already be confirmed. Otherwise, request a new link.",
+  other_device:
+    "Your email address is confirmed. To finish, open the link in the same browser you signed up with, or simply sign in below.",
+  other_device_reset:
+    "Open the reset link in the same browser where you asked for it, or request a new link below.",
+  inactive: "This account has been deactivated. Contact the editorial office if you think this is a mistake.",
+  oauth: "Sign-in with Google is not available right now. Please use your email and password.",
+};
+
 export function LinkError() {
   const error = useSearchParams().get("error");
   if (!error) return null;
+  const success = error === "other_device";
   return (
-    <div role="alert" className="rounded-md bg-[#FDECEF] px-4 py-3 text-sm text-[#A3283C]">
-      {error === "link"
-        ? "That link is invalid or has expired. Please request a new one."
-        : "Sign-in with Google is not available right now. Please use your email and password."}
+    <div
+      role={success ? "status" : "alert"}
+      className={`rounded-md px-4 py-3 text-sm ${success ? "bg-[#EAF5E6] text-[#2F6B22]" : "bg-[#FDECEF] text-[#A3283C]"}`}
+    >
+      {LINK_ERRORS[error] ?? LINK_ERRORS.link}
     </div>
+  );
+}
+
+/** "Resend the confirmation email" (item 45), for the sign-in error and the post-sign-up screen. */
+export function ResendConfirmation({ email }: { email?: string }) {
+  const [state, action, pending] = useActionState(resendConfirmation, { status: "idle" } as FormState);
+  return (
+    <form action={action} className="space-y-3 rounded-md border border-line bg-paper p-4" noValidate>
+      <p className="text-sm text-ink-muted">Didn&rsquo;t get the email, or the link has expired?</p>
+      <FormMessage state={state} />
+      {email ? (
+        <input type="hidden" name="email" value={state.values?.email ?? email} />
+      ) : (
+        <AuthField name="email" label="Email address" type="email" autoComplete="email" state={state} />
+      )}
+      <Button type="submit" variant="outline" className="w-full" disabled={pending}>
+        {pending ? "Sending…" : "Resend the confirmation email"}
+      </Button>
+    </form>
   );
 }
 

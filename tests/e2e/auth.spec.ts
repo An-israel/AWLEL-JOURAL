@@ -60,3 +60,53 @@ test("sign-in returns people to the page they asked for", async ({ page }) => {
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/users$/);
 });
+
+test("signed-in people who open /login or /signup go to their landing page", async ({ page }) => {
+  const reviewer = await createUser("reviewer", "landing");
+  await signIn(page, reviewer.email, TEST_PASSWORD);
+  await expect(page).toHaveURL(/\/admin\/reviews$/);
+  await page.goto("/login");
+  await expect(page).toHaveURL(/\/admin\/reviews$/);
+  await page.goto("/signup");
+  await expect(page).toHaveURL(/\/admin\/reviews$/);
+});
+
+test("only failed sign-ins count, per account, so one account's failures don't lock out others", async ({
+  page,
+}) => {
+  const target = await createUser("author", "locked");
+  const other = await createUser("author", "neighbour");
+  for (let i = 0; i < 5; i++) {
+    await signIn(page, target.email, "Wrong-passw0rd");
+    await expect(page.locator("form").getByRole("alert")).toHaveText("The email or password is incorrect.");
+  }
+  await signIn(page, target.email, TEST_PASSWORD);
+  await expect(page.locator("form").getByRole("alert")).toContainText("Too many attempts");
+  // Same IP, different account: still fine.
+  await signIn(page, other.email, TEST_PASSWORD);
+  await expect(page).toHaveURL(/\/account$/);
+});
+
+test("an expired reset or invitation link says so before the form", async ({ page }) => {
+  await page.goto("/reset-password");
+  await expect(page.getByRole("heading", { name: "This link has expired" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Send a new link" })).toHaveAttribute(
+    "href",
+    "/forgot-password",
+  );
+  await expect(page.getByLabel("New password")).toHaveCount(0);
+});
+
+test("a link with an error in its fragment shows a clear message", async ({ page }) => {
+  await page.goto(
+    "/auth/callback?next=%2Freset-password#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired",
+  );
+  await expect(page).toHaveURL(/\/auth\/confirm/);
+  await expect(page.getByRole("alert")).toContainText("This link has expired or has already been used.");
+});
+
+test("a link without code or token goes to /auth/confirm", async ({ page }) => {
+  await page.goto("/auth/callback?next=%2Faccount");
+  await expect(page).toHaveURL(/\/auth\/confirm\?next=%2Faccount$/);
+  await expect(page.getByRole("alert")).toContainText("This link is incomplete.");
+});

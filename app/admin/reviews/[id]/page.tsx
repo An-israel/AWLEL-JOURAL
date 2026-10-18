@@ -8,8 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { requireRole } from "@/lib/auth";
 import { getFeatureFlags } from "@/lib/data/feature-flags";
 import { ADMIN_AREA_ROLES } from "@/lib/roles";
-import { RECOMMENDATION_LABELS } from "@/lib/submission-status";
+import { fileRoleLabel, RECOMMENDATION_LABELS } from "@/lib/submission-status";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { InvitationResponse } from "./invitation-response";
 import { ReviewForm } from "./review-form";
 
 export const metadata: Metadata = { title: "Review" };
@@ -43,7 +44,14 @@ async function Content({ params }: { params: Props["params"] }) {
   ]);
   const manuscripts = (assignedFiles ?? [])
     .filter((f) => f.submission_id === a.submission_id)
-    .map((f) => ({ id: f.file_id, kind: f.kind, version: f.version, created_at: f.created_at }));
+    .sort((x, y) => x.created_at.localeCompare(y.created_at))
+    .map((f) => ({
+      id: f.file_id,
+      kind: f.kind,
+      version: f.version,
+      isPdf: f.is_pdf,
+      created_at: f.created_at,
+    }));
   const annotated = ownFiles?.[0] ?? null;
 
   return (
@@ -51,7 +59,13 @@ async function Content({ params }: { params: Props["params"] }) {
       <AdminPageHeader
         title={a.title}
         crumbs={[{ href: "/admin/reviews", label: "Reviews" }, { label: "Manuscript" }]}
+        description={
+          a.round > 1 ? `Review round ${a.round}: a revised version of the manuscript.` : undefined
+        }
       />
+      {a.assignment_status === "pending" && !a.response ? (
+        <InvitationResponse assignmentId={a.assignment_id} />
+      ) : null}
       <div
         role="note"
         className="mt-6 rounded-lg border border-gold bg-[#FBF3E4] px-4 py-3 text-sm text-[#7A4F18]"
@@ -83,6 +97,30 @@ async function Content({ params }: { params: Props["params"] }) {
                   <strong>{a.recommendation ? RECOMMENDATION_LABELS[a.recommendation] : "—"}</strong>
                 </p>
                 <RichText html={a.comments} className="prose-reading mt-3 text-base" />
+                {a.confidential_comments ? (
+                  <div className="mt-4 rounded-md bg-[#FBF3E4] px-3 py-2 text-sm text-[#7A4F18]">
+                    <p className="text-xs font-semibold tracking-wide uppercase">
+                      Confidential, for the editors only
+                    </p>
+                    <p className="mt-1 whitespace-pre-wrap">{a.confidential_comments}</p>
+                  </div>
+                ) : null}
+                {annotated ? (
+                  <div className="mt-4">
+                    <h3 className="text-sm font-semibold">Your marked-up file</h3>
+                    <div className="mt-2">
+                      <SubmissionFileList
+                        files={[
+                          {
+                            id: annotated.id,
+                            label: annotated.original_name,
+                            meta: `Reviewer's marked-up file · ${date.format(new Date(annotated.created_at))}`,
+                          },
+                        ]}
+                      />
+                    </div>
+                  </div>
+                ) : null}
               </>
             ) : (
               <ReviewForm
@@ -90,6 +128,7 @@ async function Content({ params }: { params: Props["params"] }) {
                 submissionId={a.submission_id}
                 version={a.assignment_version}
                 comments={a.comments ?? ""}
+                confidentialComments={a.confidential_comments ?? ""}
                 recommendation={a.recommendation}
                 annotatedFileId={annotated?.id ?? null}
                 annotatedFileName={annotated?.original_name ?? null}
@@ -104,10 +143,8 @@ async function Content({ params }: { params: Props["params"] }) {
               <SubmissionFileList
                 files={manuscripts.map((f) => ({
                   id: f.id,
-                  label:
-                    f.kind === "revision"
-                      ? `Revised manuscript (v${f.version})`
-                      : `Manuscript (v${f.version})`,
+                  // Labelled by role, not by a per-kind count (item 64).
+                  label: fileRoleLabel({ kind: f.kind, version: f.version, isPdf: f.isPdf }),
                   meta: date.format(new Date(f.created_at)),
                 }))}
               />

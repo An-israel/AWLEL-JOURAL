@@ -30,6 +30,8 @@ export interface FormState {
   message?: string;
   fieldErrors?: Record<string, string>;
   values?: Record<string, string>;
+  /** Offer "Resend the confirmation email" for values.email (item 45). */
+  resend?: boolean;
 }
 
 export function fieldErrorsOf(error: z.ZodError): Record<string, string> {

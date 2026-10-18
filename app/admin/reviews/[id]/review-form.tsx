@@ -7,7 +7,7 @@ import { RichTextEditor } from "@/components/admin/rich-text-editor";
 import { useUnsavedChanges } from "@/components/admin/use-unsaved-changes";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
-import { FieldError } from "@/components/ui/input";
+import { FieldError, Label, Textarea } from "@/components/ui/input";
 import { toast } from "@/components/ui/toaster";
 import { RECOMMENDATION_LABELS, RECOMMENDATIONS, type Recommendation } from "@/lib/submission-status";
 import { uploadSubmissionFile } from "@/lib/submissions/upload-client";
@@ -18,6 +18,7 @@ export function ReviewForm({
   submissionId,
   version: initialVersion,
   comments: initialComments,
+  confidentialComments: initialConfidential,
   recommendation: initialRecommendation,
   annotatedFileId: initialAnnotated,
   annotatedFileName,
@@ -26,6 +27,7 @@ export function ReviewForm({
   submissionId: string;
   version: number;
   comments: string;
+  confidentialComments: string;
   recommendation: Recommendation | null;
   annotatedFileId: string | null;
   annotatedFileName: string | null;
@@ -33,6 +35,7 @@ export function ReviewForm({
   const router = useRouter();
   const [version, setVersion] = useState(initialVersion);
   const [comments, setComments] = useState(initialComments);
+  const [confidential, setConfidential] = useState(initialConfidential);
   const [recommendation, setRecommendation] = useState<Recommendation | null>(initialRecommendation);
   const [annotated, setAnnotated] = useState<{ id: string; name: string } | null>(
     initialAnnotated ? { id: initialAnnotated, name: annotatedFileName ?? "Annotated file" } : null,
@@ -51,6 +54,7 @@ export function ReviewForm({
         assignmentId,
         expectedVersion: version,
         comments,
+        confidentialComments: confidential,
         recommendation,
         annotatedFileId: annotated?.id ?? null,
         submit,
@@ -98,10 +102,11 @@ export function ReviewForm({
 
       <div>
         <p id="rc-label" className="text-base font-semibold">
-          Comments for the editors and author
+          Comments for the author
         </p>
         <p className="mt-0.5 text-sm text-ink-muted">
-          Your comments may be shared with the author without your name. Please don&rsquo;t identify yourself.
+          The editors may share these with the author, without your name. Please don&rsquo;t identify
+          yourself.
         </p>
         <div className="mt-2">
           <RichTextEditor
@@ -120,7 +125,30 @@ export function ReviewForm({
       </div>
 
       <div>
-        <p className="text-base font-semibold">Annotated manuscript (optional)</p>
+        <Label htmlFor="rc-confidential" className="text-base font-semibold">
+          Confidential comments to the editors (optional)
+        </Label>
+        <p id="rc-confidential-hint" className="mt-0.5 text-sm text-ink-muted">
+          Only the editors see these; they are never shared with the author. For example, concerns about
+          originality or ethics, or how strongly you hold your recommendation.
+        </p>
+        <Textarea
+          id="rc-confidential"
+          rows={5}
+          value={confidential}
+          onChange={(e) => {
+            setConfidential(e.target.value);
+            setDirty(true);
+          }}
+          className="mt-2"
+          aria-describedby={`rc-confidential-hint${errors.confidentialComments ? " rc-confidential-error" : ""}`}
+          aria-invalid={errors.confidentialComments ? true : undefined}
+        />
+        <FieldError id="rc-confidential-error">{errors.confidentialComments}</FieldError>
+      </div>
+
+      <div>
+        <p className="text-base font-semibold">Marked-up manuscript (optional)</p>
         <p className="mt-0.5 text-sm text-ink-muted">
           Word or PDF, up to 20 MB. Remove your name from the file&rsquo;s properties first.
         </p>

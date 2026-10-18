@@ -5,6 +5,7 @@ import { userWithRole } from "@/lib/auth";
 import { fromDbError, forbiddenResult, invalid, type ActionResult } from "@/lib/admin/result";
 import { expireCatalog } from "@/lib/admin/revalidate";
 import { sanitizeRichText } from "@/lib/sanitize";
+import { notifyPublishedSubmissions } from "@/lib/submissions/published";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const STAFF = ["super_admin", "editor"] as const;
@@ -267,6 +268,7 @@ export async function setIssueStatus(input: {
     p_include_articles: parsed.data.includeArticles ?? false,
   });
   if (error) return fromDbError(error, "issue");
+  if (parsed.data.status === "published") await notifyPublishedSubmissions();
   const { data: articles } = await supabase.from("articles").select("id").eq("issue_id", parsed.data.id);
   expireCatalog({
     issueIds: [parsed.data.id],
