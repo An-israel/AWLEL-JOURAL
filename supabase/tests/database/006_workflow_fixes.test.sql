@@ -1,7 +1,7 @@
 -- pgTAP: workflow fixes (audit items 44, 48, 51-65). Run: npx supabase test db
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(52);
+select plan(53);
 
 insert into auth.users (id, email, aud, role) values
   ('c1111111-1111-4111-8111-111111111111', 'ed-wf@t.local', 'authenticated', 'authenticated'),
@@ -106,6 +106,15 @@ create temp table before_reminder as
 update public.review_assignments set reminder_sent_at = now() where reviewer_id = 'c2222222-2222-4222-8222-222222222222';
 select is((select version from public.review_assignments where reviewer_id = 'c2222222-2222-4222-8222-222222222222'),
   (select version from before_reminder), 'reminder_sent_at does not change the version');
+-- Nor does accepting the invitation: the reviewer then writes the review on
+-- the same page, with the version it loaded.
+update public.review_assignments set response = null, responded_at = null
+  where reviewer_id = 'c2222222-2222-4222-8222-222222222222';
+update before_reminder set version = (select version from public.review_assignments
+  where reviewer_id = 'c2222222-2222-4222-8222-222222222222');
+update public.review_assignments set response = 'accepted' where reviewer_id = 'c2222222-2222-4222-8222-222222222222';
+select is((select version from public.review_assignments where reviewer_id = 'c2222222-2222-4222-8222-222222222222'),
+  (select version from before_reminder), 'accepting an invitation does not change the version');
 
 -- Authors never read reviews, so never confidential comments (item 60).
 select pg_temp.login('c3333333-3333-4333-8333-333333333333');

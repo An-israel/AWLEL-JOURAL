@@ -2964,13 +2964,15 @@ create index if not exists submissions_unfinished_idx on public.submissions (cre
 -- ---------------------------------------------------------------------------
 -- 3. Reminder bookkeeping no longer bumps version or updated_at (item 61), so
 --    a reviewer or author with a form open doesn't get a false conflict.
+--    Accepting an invitation doesn't bump the version either: it leaves the
+--    review itself untouched, and the reviewer writes it on the same page.
 -- ---------------------------------------------------------------------------
 drop trigger if exists review_assignments_updated_at on public.review_assignments;
 create trigger review_assignments_updated_at before update on public.review_assignments
   for each row execute function public.set_updated_at('reminder_sent_at');
 drop trigger if exists review_assignments_version on public.review_assignments;
 create trigger review_assignments_version before update on public.review_assignments
-  for each row execute function public.bump_version('reminder_sent_at');
+  for each row execute function public.bump_version('reminder_sent_at', 'response', 'responded_at');
 
 drop trigger if exists submissions_updated_at on public.submissions;
 create trigger submissions_updated_at before update on public.submissions

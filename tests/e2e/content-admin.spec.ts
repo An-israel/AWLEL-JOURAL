@@ -204,7 +204,7 @@ test.describe("editor content workflows", () => {
     await expect(head.locator('meta[name="citation_firstpage"]')).toHaveAttribute("content", "5");
     await expect(head.locator('meta[name="citation_pdf_url"]')).toHaveAttribute(
       "content",
-      new RegExp(`/api/download/article/${articleId}\\?format=pdf$`),
+      new RegExp(`/api/download/article/${articleId}\\?format=pdf&inline=1$`),
     );
     await expect(head.locator('meta[name="DC.creator"]')).toHaveAttribute("content", "Ada Ọkafọ");
     const ld = (
@@ -263,12 +263,12 @@ test.describe("editor content workflows", () => {
     await page.getByRole("button", { name: "Create draft article" }).click();
     await expect(page).toHaveURL(/\/admin\/articles\/[0-9a-f-]{36}$/);
     const articleId = page.url().split("/").pop()!;
-    await expect(page.getByLabel("Publication date")).toHaveValue("");
+    await expect(page.locator("#a-date")).toHaveValue("");
 
     await page.getByRole("button", { name: "Publish article" }).click();
     await expect(page.getByText(/It will appear when its issue is published/)).toBeVisible();
     // The form picks up the date the server set when publishing.
-    await expect(page.getByLabel("Publication date")).not.toHaveValue("");
+    await expect(page.locator("#a-date")).not.toHaveValue("");
 
     await page.getByLabel("Title", { exact: true }).fill(`${title} (revised)`);
     await page.getByRole("button", { name: "Save article" }).click();
@@ -280,7 +280,7 @@ test.describe("editor content workflows", () => {
       .single();
     expect(data?.title).toBe(`${title} (revised)`);
     expect(data?.published_at).not.toBeNull();
-    await expect(page.getByLabel("Publication date")).toHaveValue(data!.published_at!.slice(0, 10));
+    await expect(page.locator("#a-date")).toHaveValue(data!.published_at!.slice(0, 10));
   });
 
   test("publishing an empty issue needs a tick, and renumbering keeps the old address", async ({ page }) => {
@@ -446,7 +446,10 @@ test.describe("Super Admin content", () => {
     // Nothing changes until the effect has been explained and confirmed.
     const dialog = page.getByRole("alertdialog");
     await expect(dialog).toContainText("disappear from the home page");
-    await expect(flag).toHaveAttribute("aria-checked", "true");
+    // The open dialog hides the rest of the page from assistive technology.
+    await expect(
+      page.getByRole("switch", { name: /Most read on the home page/, includeHidden: true }),
+    ).toHaveAttribute("aria-checked", "true");
     await dialog.getByRole("button", { name: "Turn off" }).click();
     await expect(page.getByText("Most read on the home page turned off.")).toBeVisible();
     await expect(flag).toHaveAttribute("aria-checked", "false");
