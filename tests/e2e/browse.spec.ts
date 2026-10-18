@@ -93,6 +93,33 @@ test("search finds articles by keyword and author, with highlights and filters",
   await expect(page.getByRole("heading", { name: "No articles found" })).toBeVisible();
 });
 
+test("the phone menu offers the account link and closes on the current page's link", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 800 });
+  await page.goto("/about");
+  await page.getByRole("button", { name: "Open menu" }).click();
+  const menu = page.getByRole("dialog", { name: "Menu" });
+  await expect(menu.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/login");
+  await menu.getByRole("link", { name: "About the Journal" }).click();
+  await expect(menu).toBeHidden();
+});
+
+test("search edge cases: literal author names, pages past the end, clearing filters", async ({ page }) => {
+  // % and _ are matched literally, not as wildcards.
+  await page.goto("/search?author=%25");
+  await expect(page.getByRole("heading", { name: "No articles found" })).toBeVisible();
+  await page.goto("/search?author=_");
+  await expect(page.getByRole("heading", { name: "No articles found" })).toBeVisible();
+
+  await page.goto("/search?q=Igbo&page=3");
+  await expect(page.getByRole("heading", { name: "1 article found" })).toBeVisible();
+  await expect(page.getByText("There is only 1 page of results")).toBeVisible();
+
+  await page.goto("/search?q=Igbo&category=linguistics");
+  await page.getByRole("link", { name: "Clear filters" }).click();
+  await expect(page).toHaveURL(/\/search\?q=Igbo$/);
+  await expect(page.getByRole("link", { name: "Clear filters" })).toHaveCount(0);
+});
+
 test("home shows the latest issue, categories and most read", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("link", { name: "Read the latest issue" })).toHaveAttribute(
