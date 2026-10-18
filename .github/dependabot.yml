@@ -23,7 +23,16 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    # One PR a month for all workflow actions, not one per action.
+    groups:
+      github-actions:
+        patterns: ["*"]
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: monthly
+    ignore:
+      # The image stays on the current Node LTS (22); odd-numbered Node
+      # releases are short-lived. Move to the next LTS deliberately.
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]

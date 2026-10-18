@@ -12,10 +12,20 @@ Do the steps in order.
 2. Open your Supabase project → **SQL Editor** (left sidebar) → **New query**.
 3. Paste (Ctrl+V) and press **Run** (or Ctrl+Enter). If Supabase warns about "destructive operations", choose
    to run it anyway.
-4. After a few seconds it says **Success. No rows returned**. That's it: all tables, security rules, storage
-   buckets and the starting content (categories, editorial board, pages and one sample issue) are in place.
+4. After a few seconds it shows a small **status table**. Everything is ready when it says:
 
-Running it twice is safe: the second time it stops with "AWLEL is already set up" and changes nothing.
+   | item | status |
+   | ---- | ------ |
+   | Database updates applied | **12 of 12** |
+   | Subject categories | 10 |
+   | Static pages | 6 |
+   | Published issues | 1 (the sample issue) |
+   | Storage buckets | 4 of 4 |
+   | Super Admins | 0 (until Step 5) |
+
+You can run this file as often as you like. It only adds what is missing, never deletes anything, and leaves
+an up-to-date database unchanged. **When new features come out, run the latest version of it again** to update
+the database: that is the only database step updates ever need.
 
 ## Step 2: Tell Supabase where the website lives
 

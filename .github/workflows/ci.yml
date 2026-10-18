@@ -1,4 +1,4 @@
-# CI on every pull request and push to main (item 6).
+# CI on every pull request and push to main or the production branch (item 6).
 # Vercel's Git integration builds a preview per PR and deploys production on
 # merge to main; database migrations are applied by migrate.yml.
 name: CI
@@ -6,7 +6,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, "claude/**"]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -24,8 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -44,13 +44,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v3
         with:
           version: latest
       - name: Start Supabase (database only)
@@ -72,12 +72,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v3
         with:
           version: latest
       - run: npm ci
@@ -93,6 +93,8 @@ jobs:
             echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
             echo "METRICS_SALT=$(openssl rand -hex 24)"
             echo "CRON_SECRET=$(openssl rand -hex 24)"
+            echo "RESEND_WEBHOOK_SECRET=whsec_$(openssl rand -base64 24)"
+            echo "ALERT_EMAIL=alerts@awlel.local"
             echo "LOG_LEVEL=warn"
             echo "SUPER_ADMIN_EMAIL=admin@awlel.local"
             echo "SUPER_ADMIN_PASSWORD=Ci-only-passw0rd-$(openssl rand -hex 4)"
@@ -101,7 +103,7 @@ jobs:
       - name: Create the first Super Admin
         run: npm run seed:admin
       # Build cache for faster CI builds (item 107).
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: .next/cache
           key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('app/**', 'components/**', 'lib/**') }}
@@ -121,8 +123,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
       - uses: docker/build-push-action@v6
         with:
           context: .
