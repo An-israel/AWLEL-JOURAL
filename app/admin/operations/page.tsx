@@ -134,7 +134,12 @@ async function Content() {
     {
       name: "RESEND_API_KEY",
       set: Boolean(env.RESEND_API_KEY),
-      why: "sending email (otherwise only logged)",
+      why: "sending email, together with EMAIL_FROM (until both are set, emails wait in the queue)",
+    },
+    {
+      name: "EMAIL_FROM",
+      set: Boolean(env.EMAIL_FROM),
+      why: "the sender address on the journal's domain, e.g. AWLEL Journal <no-reply@your-domain>",
     },
     {
       name: "RESEND_WEBHOOK_SECRET",

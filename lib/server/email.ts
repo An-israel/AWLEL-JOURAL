@@ -23,6 +23,38 @@ export class EmailError extends Error {
   }
 }
 
+/**
+ * Thrown instead of sending while email isn't set up. The queue keeps the
+ * job waiting, without using up attempts, until it is (lib/server/jobs.ts).
+ */
+export class EmailNotConfiguredError extends Error {
+  constructor() {
+    super("Email is not set up yet (RESEND_API_KEY and EMAIL_FROM)");
+    this.name = "EmailNotConfiguredError";
+  }
+}
+
+let setupWarned = false;
+
+/**
+ * Email goes out only when RESEND_API_KEY and EMAIL_FROM are both set: a key
+ * without a sender on the journal's own domain is refused by Resend. Says
+ * what is missing once per server instance, not on every email.
+ */
+export function emailConfigured(): boolean {
+  const env = serverEnv();
+  if (env.RESEND_API_KEY && env.EMAIL_FROM) return true;
+  if (!setupWarned) {
+    setupWarned = true;
+    logger.warn(
+      env.RESEND_API_KEY
+        ? "RESEND_API_KEY is set but EMAIL_FROM is not: emails stay queued until both are set"
+        : "email is not set up (RESEND_API_KEY and EMAIL_FROM): emails stay queued until both are set",
+    );
+  }
+  return false;
+}
+
 /** Drops addresses that bounced or complained (item 101). */
 async function withoutSuppressed(to: string | string[]): Promise<string[]> {
   const list = (Array.isArray(to) ? to : [to]).map((a) => a.trim()).filter(Boolean);
@@ -39,26 +71,21 @@ async function withoutSuppressed(to: string | string[]): Promise<string[]> {
 }
 
 /**
- * Sends one email through Resend. Without RESEND_API_KEY (local development)
- * the email is logged instead of sent. `idempotencyKey` makes Resend ignore a
- * repeat of the same send (item 14). Never called inline from a request
- * without the queue behind it: see lib/server/jobs.ts.
+ * Sends one email through Resend. Until email is set up it throws
+ * EmailNotConfiguredError, so queued emails wait instead of being lost.
+ * `idempotencyKey` makes Resend ignore a repeat of the same send (item 14).
+ * Never called inline from a request without the queue behind it: see
+ * lib/server/jobs.ts.
  */
 export async function sendEmail(
   message: EmailMessage,
   idempotencyKey: string,
 ): Promise<{ id: string | null }> {
+  if (!emailConfigured()) throw new EmailNotConfiguredError();
   const env = serverEnv();
   const to = await withoutSuppressed(message.to);
   if (to.length === 0) {
     logger.info({ subject: message.subject, idempotencyKey }, "every recipient is suppressed; email skipped");
-    return { id: null };
-  }
-  if (!env.RESEND_API_KEY) {
-    logger.info(
-      { subject: message.subject, idempotencyKey },
-      "email provider not configured; email logged, not sent",
-    );
     return { id: null };
   }
 

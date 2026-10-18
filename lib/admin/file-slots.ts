@@ -40,6 +40,9 @@ export interface SlotRule {
 }
 
 const MB = 1024 * 1024;
+// Published files stop at 50 MB, the most Supabase's Free plan accepts for one
+// upload (the published-files bucket has the same limit). On Supabase Pro both
+// can be raised: docs/RUNBOOK.md, "Uploads failing".
 const IMAGES = [MIME.jpeg, MIME.png, MIME.webp];
 
 export const SLOT_RULES: Record<FileSlot, SlotRule> = {
@@ -59,7 +62,7 @@ export const SLOT_RULES: Record<FileSlot, SlotRule> = {
     fileRole: "issue_pdf",
     mimes: [MIME.pdf],
     extensions: [".pdf"],
-    maxBytes: 100 * MB,
+    maxBytes: 50 * MB,
     table: "issues",
     column: "full_pdf_file_id",
   },
@@ -69,7 +72,7 @@ export const SLOT_RULES: Record<FileSlot, SlotRule> = {
     fileRole: "issue_docx",
     mimes: [MIME.docx],
     extensions: [".docx"],
-    maxBytes: 100 * MB,
+    maxBytes: 50 * MB,
     table: "issues",
     column: "full_docx_file_id",
   },

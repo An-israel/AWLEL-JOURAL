@@ -1,8 +1,10 @@
 # Weekly backup (item 84): a full database dump every Monday, plus all stored
 # files (PDFs, Word files, covers, manuscripts) on the first Monday of each
-# month. Each archive goes to Google Drive and is kept here as a workflow
-# artifact for 30 days. The result is reported to the site, which alerts the
-# Super Admin if no backup succeeds for a week.
+# month. Each archive goes only to Google Drive: never to a workflow artifact,
+# which anyone could download from a public repository, and the dump holds
+# every account's password hash. The result is reported to the site, which
+# alerts the Super Admin if no backup succeeds for a week. Until the secrets
+# below are added, each run skips with a notice instead of failing.
 # Repository secrets:
 #   SUPABASE_DB_URL         Supabase → Connect → Session pooler connection string (with password)
 #   SUPABASE_URL            https://<project-ref>.supabase.co
@@ -43,20 +45,46 @@ jobs:
       SITE_URL: ${{ secrets.SITE_URL }}
       CRON_SECRET: ${{ secrets.CRON_SECRET }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      # Not set up yet (no SUPABASE_DB_URL): skip with a notice, like
+      # scheduled.yml, so no failure email arrives every week. Half set up:
+      # fail, naming what is missing.
+      - name: Check the secrets
+        id: check
+        run: |
+          missing=""
+          for name in SUPABASE_DB_URL NEXT_PUBLIC_SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY \
+            GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET GOOGLE_REFRESH_TOKEN; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::notice::Backups are not set up yet (docs/RUNBOOK.md, \"Set up backups\"); skipping."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          elif [ -n "$missing" ]; then
+            # NEXT_PUBLIC_SUPABASE_URL is the SUPABASE_URL secret.
+            echo "::error::Missing repository secrets:${missing/NEXT_PUBLIC_SUPABASE_URL/SUPABASE_URL}"
+            exit 1
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.check.outputs.ready == 'true'
+        uses: actions/checkout@v7
+      - if: steps.check.outputs.ready == 'true'
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
-      - run: npm ci --omit=dev --ignore-scripts
-      - uses: supabase/setup-cli@v3
+      - if: steps.check.outputs.ready == 'true'
+        run: npm ci --omit=dev --ignore-scripts
+      - if: steps.check.outputs.ready == 'true'
+        uses: supabase/setup-cli@v3
         with:
           version: latest
 
       - name: Dump the database
         id: db
+        if: steps.check.outputs.ready == 'true'
         run: |
-          test -n "$SUPABASE_DB_URL" || { echo "::error::SUPABASE_DB_URL is not set"; exit 1; }
           stamp=$(date -u +%Y-%m-%d)
           mkdir -p backup
           supabase db dump --db-url "$SUPABASE_DB_URL" -f backup/roles.sql --role-only
@@ -76,7 +104,7 @@ jobs:
 
       - name: Back up stored files (first Monday of the month, or on request)
         id: files
-        if: ${{ inputs.include_files || github.event_name == 'schedule' }}
+        if: ${{ steps.check.outputs.ready == 'true' && (inputs.include_files || github.event_name == 'schedule') }}
         run: |
           if [ "${{ github.event_name }}" = "schedule" ] && [ "$(date -u +%d)" -gt 7 ]; then
             echo "Not the first week of the month; skipping files."; exit 0
@@ -86,31 +114,45 @@ jobs:
           tar -czf "awlel-files-$stamp.tar.gz" -C files .
           echo "file=awlel-files-$stamp.tar.gz" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: backup-${{ github.run_id }}
-          path: awlel-*.tar.gz
-          retention-days: 30
-
       - name: Copy to Google Drive
+        if: steps.check.outputs.ready == 'true'
         run: |
           node scripts/upload-to-drive.mjs "${{ steps.db.outputs.file }}" --keep 12 --prefix awlel-db-
           if [ -n "${{ steps.files.outputs.file }}" ]; then
             node scripts/upload-to-drive.mjs "${{ steps.files.outputs.file }}" --keep 3 --prefix awlel-files-
           fi
 
+      # The site must answer 2xx itself: a redirect (for example from the bare
+      # domain to www) would otherwise "succeed" without recording anything.
       - name: Report success to the site
-        if: success()
+        if: success() && steps.check.outputs.ready == 'true'
         run: |
           [ -n "$SITE_URL" ] && [ -n "$CRON_SECRET" ] || exit 0
-          curl --fail-with-body -sS -X POST "$SITE_URL/api/cron/heartbeat" \
+          out=$(curl -sS -o response.txt -w '%{http_code} %{redirect_url}' --max-time 60 -X POST \
+            "$SITE_URL/api/cron/heartbeat" \
             -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" \
-            -d "{\"task\":\"backup\",\"status\":\"succeeded\",\"detail\":{\"file\":\"${{ steps.db.outputs.file }}\",\"bytes\":${{ steps.db.outputs.size }},\"files_archive\":\"${{ steps.files.outputs.file }}\"}}"
+            -d "{\"task\":\"backup\",\"status\":\"succeeded\",\"detail\":{\"file\":\"${{ steps.db.outputs.file }}\",\"bytes\":${{ steps.db.outputs.size }},\"files_archive\":\"${{ steps.files.outputs.file }}\"}}") \
+            || { echo "::error::Could not reach SITE_URL ($SITE_URL)."; exit 1; }
+          code=${out%% *}; target=${out#* }
+          cat response.txt; echo
+          case "$code" in
+            2??) ;;
+            3??) echo "::error::SITE_URL redirects to ${target%%/api/*}; set SITE_URL to the exact address."; exit 1 ;;
+            *) echo "::error::The site answered HTTP $code."; exit 1 ;;
+          esac
 
       - name: Report failure to the site
         if: failure()
         run: |
           [ -n "$SITE_URL" ] && [ -n "$CRON_SECRET" ] || exit 0
-          curl -sS -X POST "$SITE_URL/api/cron/heartbeat" \
+          out=$(curl -sS -o response.txt -w '%{http_code} %{redirect_url}' --max-time 60 -X POST \
+            "$SITE_URL/api/cron/heartbeat" \
             -H "Authorization: Bearer $CRON_SECRET" -H "Content-Type: application/json" \
-            -d "{\"task\":\"backup\",\"status\":\"failed\",\"error\":\"See GitHub Actions run ${{ github.run_id }}\"}"
+            -d "{\"task\":\"backup\",\"status\":\"failed\",\"error\":\"See GitHub Actions run ${{ github.run_id }}\"}") \
+            || { echo "::error::Could not reach SITE_URL ($SITE_URL)."; exit 1; }
+          code=${out%% *}; target=${out#* }
+          case "$code" in
+            2??) ;;
+            3??) echo "::error::SITE_URL redirects to ${target%%/api/*}; set SITE_URL to the exact address."; exit 1 ;;
+            *) echo "::error::The site answered HTTP $code."; exit 1 ;;
+          esac

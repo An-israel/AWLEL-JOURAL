@@ -1,8 +1,8 @@
 # Connecting your own domain
 
 For a domain you buy yourself (for example `awlel-journal.org`) from a registrar such as Namecheap, GoDaddy,
-Porkbun or Cloudflare. Two parts: the **website** (required) and **email** (so emails from the site reach
-inboxes). Both are done in the registrar's DNS settings; changes usually work within an hour, sometimes up to
+Porkbun or Cloudflare. Two parts, both required before the site is announced: the **website** and **email**
+(without it, authors never receive their sign-up confirmation, and no email from the site goes out). Both are done in the registrar's DNS settings; changes usually work within an hour, sometimes up to
 a day.
 
 ## 1. The website
@@ -27,11 +27,17 @@ a day.
    `ns1.vercel-dns.com` and `ns2.vercel-dns.com`. Then Vercel manages all DNS, and the email records below are
    added in Vercel → **Domains** → your domain → **DNS Records** instead.
 
-5. Then update three places with the new address:
+5. **Find the exact address.** One of the two addresses redirects to the other (Vercel → **Domains** shows
+   which one, marked *Redirects to…*). Use the other one, the *primary* address, everywhere below: open the
+   site in a browser and copy what stays in the address bar, without the `/` at the end (e.g.
+   `https://www.awlel-journal.org` or `https://awlel-journal.org`). The redirecting address works for
+   visitors, but the scheduled tasks and backups can't follow it and stop with “SITE_URL redirects to …”.
+6. Then update three places with that exact address:
    - Vercel → Environment Variables: `NEXT_PUBLIC_SITE_URL` = `https://awlel-journal.org` → Redeploy.
    - Supabase → Authentication → URL Configuration: **Site URL** = `https://awlel-journal.org`; add
      `https://awlel-journal.org/auth/callback` to Redirect URLs.
-   - GitHub secret `SITE_URL` (if you've set up the scheduled tasks and backups from the runbook).
+   - GitHub secret `SITE_URL` (if you've set up the scheduled tasks and backups from the runbook): GitHub →
+     the repository → **Settings** → **Secrets and variables** → **Actions** → `SITE_URL` → **Update**.
 
 ## 2. Email (Resend)
 
@@ -54,11 +60,20 @@ your domain, for example `no-reply@awlel-journal.org`:
    - Resend → **API Keys** → **Create API Key** (sending access) → copy it.
    - Vercel → Environment Variables: `RESEND_API_KEY` = that key; `EMAIL_FROM` =
      `AWLEL Journal <no-reply@awlel-journal.org>` → Redeploy.
-4. Supabase's own emails (sign-up confirmation, password reset) can use the same domain: Supabase →
+   - **Set both.** The site sends email only when both are set, and `EMAIL_FROM` must use the domain you just
+     verified. Until then, emails wait in a queue and nothing is lost: they go out within about 30 minutes of
+     the redeploy. Admin → Operations → **Configuration** shows both as *Set* when it is right.
+4. **Required: Supabase's own emails** (sign-up confirmation, password reset, invitations). Supabase's built-in
+   email sends **only to members of your Supabase organisation** (Supabase → Organization → Team) and only about
+   2 an hour, so without this step authors never receive their sign-up confirmation. Supabase →
    **Authentication** → **Emails** → **SMTP Settings** → enable custom SMTP with host `smtp.resend.com`, port
-   `465`, user `resend`, password = a Resend API key, sender `no-reply@awlel-journal.org`. Without this,
-   Supabase sends only a few emails an hour.
-5. After about four weeks without delivery problems, change the DMARC record's `p=none` to `p=quarantine`.
+   `465`, user `resend`, password = a Resend API key, sender email `no-reply@awlel-journal.org`, sender name
+   `AWLEL Journal` → **Save**.
+5. Then Supabase → **Authentication** → **Rate Limits** → *Rate limit for sending emails*: raise it to about
+   **100** an hour → **Save** (the setting can only be changed once custom SMTP is on).
+6. Test with an address outside your Supabase team: sign up on the site and check the confirmation email arrives.
+   If the link in it fails, check the email templates are the ones in `docs/LAUNCH_GUIDE.md`, step 6.
+7. After about four weeks without delivery problems, change the DMARC record's `p=none` to `p=quarantine`.
 
 **If the journal later moves to `awlel.unn.edu.ng`:** the same records apply, but UNN ICT creates them in the
 `unn.edu.ng` DNS (a CNAME `awlel` → the Vercel value, and the Resend records under `awlel`).

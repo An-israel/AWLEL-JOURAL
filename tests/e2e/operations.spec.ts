@@ -63,8 +63,16 @@ test("cron endpoints need the secret and run the queue", async ({ request }) => 
     "alerts:succeeded",
     "frequent:succeeded",
   ]);
-  const { data: job } = await db.from("jobs").select("status").eq("idempotency_key", key).single();
-  expect(job?.status).toBe("succeeded");
+  // Email isn't set up in tests (no RESEND_API_KEY or EMAIL_FROM), so the
+  // email waits in the queue for later, without using up an attempt.
+  const { data: job } = await db
+    .from("jobs")
+    .select("status, attempts, run_at")
+    .eq("idempotency_key", key)
+    .single();
+  expect(job?.status).toBe("queued");
+  expect(job?.attempts).toBe(0);
+  expect(new Date(job!.run_at).getTime()).toBeGreaterThan(Date.now());
 });
 
 test("a job that can't succeed is dead-lettered and can be discarded", async ({ page, request }) => {

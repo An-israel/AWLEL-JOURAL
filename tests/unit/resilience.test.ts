@@ -10,7 +10,14 @@ type Result = { data: unknown; error: unknown };
 const rpcResults = new Map<string, Result | ((args: Record<string, unknown>) => Result)>();
 const rpcCalls: { name: string; args: Record<string, unknown> }[] = [];
 const tableResults = new Map<string, Result>();
+const tableCalls: { table: string; method: string }[] = [];
 const storage = { createSignedUrl: vi.fn() };
+const mockEnv = vi.hoisted(() => ({ value: {} as Record<string, string | undefined> }));
+const configuredEnv = {
+  RESEND_API_KEY: "re_test",
+  EMAIL_FROM: "AWLEL <no-reply@test>",
+  METRICS_SALT: "x".repeat(32),
+};
 
 /** A chainable query builder that resolves to the table's canned result. */
 function query(table: string) {
@@ -30,7 +37,10 @@ function query(table: string) {
     "upsert",
     "delete",
   ])
-    builder[m] = () => builder;
+    builder[m] = () => {
+      tableCalls.push({ table, method: m });
+      return builder;
+    };
   builder.single = builder.maybeSingle = () => Promise.resolve(result);
   builder.then = (resolve: (r: Result) => unknown) => Promise.resolve(result).then(resolve);
   return builder;
@@ -48,20 +58,14 @@ const fakeClient = {
 
 vi.mock("@/lib/supabase/admin", () => ({ createSupabaseAdminClient: () => fakeClient }));
 vi.mock("@/lib/supabase/public", () => ({ createSupabasePublicClient: () => fakeClient }));
-vi.mock("@/lib/env.server", () => ({
-  serverEnv: () => ({
-    RESEND_API_KEY: "re_test",
-    EMAIL_FROM: "AWLEL <no-reply@test>",
-    METRICS_SALT: "x".repeat(32),
-  }),
-}));
+vi.mock("@/lib/env.server", () => ({ serverEnv: () => mockEnv.value }));
 vi.mock("@/lib/data/catalog", () => ({
   getPublishedIssues: async () => [
     { id: "issue-1", volumeNumber: 25, issueNumber: 1, issuesInVolume: 2, year: 2025 },
   ],
 }));
 
-const { runJobNow } = await import("@/lib/server/jobs");
+const { runJobNow, EMAIL_SETUP_RETRY_MS } = await import("@/lib/server/jobs");
 const { downloadIssue } = await import("@/lib/server/downloads");
 
 const job = {
@@ -73,7 +77,9 @@ const job = {
 };
 
 beforeEach(() => {
+  mockEnv.value = { ...configuredEnv };
   rpcCalls.length = 0;
+  tableCalls.length = 0;
   rpcResults.clear();
   tableResults.clear();
   rpcResults.set("claim_job", { data: [job], error: null });
@@ -151,6 +157,52 @@ describe("when the email provider fails", () => {
     tableResults.set("email_suppressions", { data: [{ email: "author@example.com" }], error: null });
     expect(await runJobNow(7)).toBe(true);
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("when email isn't set up yet", () => {
+  for (const [what, env] of [
+    ["no RESEND_API_KEY or EMAIL_FROM", { METRICS_SALT: configuredEnv.METRICS_SALT }],
+    ["RESEND_API_KEY without EMAIL_FROM", { ...configuredEnv, EMAIL_FROM: undefined }],
+  ] as const) {
+    it(`keeps the email queued for later, without using up an attempt (${what})`, async () => {
+      const fetch = vi.fn();
+      vi.stubGlobal("fetch", fetch);
+      mockEnv.value = env;
+      expect(await runJobNow(7)).toBe(false);
+      expect(fetch).not.toHaveBeenCalled();
+      expect(called("defer_job")).toEqual([
+        { name: "defer_job", args: { p_id: 7, p_retry_in_ms: EMAIL_SETUP_RETRY_MS } },
+      ]);
+      expect(called("fail_job")).toHaveLength(0);
+      expect(called("finish_job")).toHaveLength(0);
+    });
+  }
+
+  it("sends the waiting email on the first run after it is set up", async () => {
+    const fetch = vi.fn(async () => Response.json({ id: "em_1" }));
+    vi.stubGlobal("fetch", fetch);
+    rpcResults.set("claim_job", {
+      data: [{ ...job, created_at: new Date(Date.now() - 3 * 86_400_000).toISOString() }],
+      error: null,
+    });
+    expect(await runJobNow(7)).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(called("finish_job")).toHaveLength(1);
+  });
+
+  it("drops an email that has waited over two weeks, instead of sending it late", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    rpcResults.set("claim_job", {
+      data: [{ ...job, created_at: new Date(Date.now() - 15 * 86_400_000).toISOString() }],
+      error: null,
+    });
+    expect(await runJobNow(7)).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(tableCalls).toContainEqual({ table: "jobs", method: "delete" });
+    expect(called("fail_job")).toHaveLength(0);
+    expect(called("defer_job")).toHaveLength(0);
   });
 });
 
