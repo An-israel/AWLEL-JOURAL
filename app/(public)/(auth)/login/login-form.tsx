@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Suspense, useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { signIn, signInWithGoogle } from "../actions";
-import { AuthField, FormMessage, LinkError, NextField } from "../auth-ui";
+import { AuthField, FormMessage, LinkError, NextField, ResendConfirmation } from "../auth-ui";
 import type { FormState } from "../schemas";
 
 const initial: FormState = { status: "idle" };
@@ -38,6 +38,7 @@ export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
           {pending ? "Signing in…" : "Sign in"}
         </Button>
       </form>
+      {state.resend && state.values?.email ? <ResendConfirmation email={state.values.email} /> : null}
       {googleEnabled ? (
         <form action={signInWithGoogle}>
           <Suspense>

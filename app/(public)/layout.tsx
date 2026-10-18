@@ -1,3 +1,4 @@
+import { AuthFragmentForwarder } from "@/components/site/auth-fragment-forwarder";
 import { SiteFooter } from "@/components/site/site-footer";
 import { SiteHeader } from "@/components/site/site-header";
 import { SkipLink } from "@/components/site/skip-link";
@@ -11,6 +12,7 @@ export default function PublicLayout({ children }: LayoutProps<"/">) {
         {children}
       </main>
       <SiteFooter />
+      <AuthFragmentForwarder />
     </>
   );
 }

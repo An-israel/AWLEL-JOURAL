@@ -4,14 +4,25 @@ import Link from "next/link";
 import { Suspense, useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { signUp } from "../actions";
-import { AuthField, FormMessage, NextField } from "../auth-ui";
+import { AuthField, FormMessage, NextField, ResendConfirmation } from "../auth-ui";
 import type { FormState } from "../schemas";
 
 const initial: FormState = { status: "idle" };
 
 export function SignupForm() {
   const [state, action, pending] = useActionState(signUp, initial);
-  if (state.status === "success") return <FormMessage state={state} />;
+  if (state.status === "success") {
+    return (
+      <div className="space-y-5">
+        <FormMessage state={state} />
+        <p className="text-sm text-ink-muted">
+          The link signs you in. Open it in this browser if you can; from another device, just sign in
+          afterwards.
+        </p>
+        <ResendConfirmation email={state.values?.email} />
+      </div>
+    );
+  }
   return (
     <form action={action} className="space-y-4" noValidate>
       <Suspense>
