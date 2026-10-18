@@ -21,7 +21,7 @@ export default async function GuidelinesPage() {
         >
           <div
             aria-hidden
-            className="absolute inset-y-0 right-0 w-1/4 opacity-90"
+            className="absolute inset-y-0 right-0 hidden w-1/4 opacity-90 sm:block"
             style={{ clipPath: "polygon(55% 0, 100% 0, 100% 100%, 0 100%)" }}
           >
             <div className="accent-bands h-full w-full" />
