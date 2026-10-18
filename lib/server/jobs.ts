@@ -3,7 +3,7 @@ import type { Database, Json } from "@/lib/supabase/database.types";
 import { backoffDelayMs } from "@/lib/backoff";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { CIRCUIT_RETRY_MS, CircuitOpenError } from "./circuit-breaker";
-import { EmailError, sendEmail, type EmailMessage } from "./email";
+import { EmailError, EmailNotConfiguredError, sendEmail, type EmailMessage } from "./email";
 import { logger } from "./logger";
 import { withSpan } from "./tracing";
 
@@ -14,12 +14,28 @@ import { withSpan } from "./tracing";
  * (cron, `drainQueue`) retries it; after max_attempts it moves to the dead
  * letter table (item 20). Claiming, failing and retry times are SQL
  * functions, so timestamps come from the database clock (item 96).
+ *
+ * Until email is set up (RESEND_API_KEY and EMAIL_FROM), email jobs wait in
+ * the queue without using up attempts and go out on the first run after it
+ * is. Emails that have waited longer than two weeks are dropped instead: a
+ * submission receipt or review reminder that late would only confuse.
  */
 
 type JobHandlers = {
   "email.send": EmailMessage;
 };
 export type JobType = keyof JobHandlers;
+
+const DAY_MS = 86_400_000;
+
+/** Jobs older than this are dropped rather than run. */
+const MAX_AGE_MS: Partial<Record<string, number>> = { "email.send": 14 * DAY_MS };
+
+/**
+ * How long an email waits before it is tried again while email isn't set up:
+ * shorter than the 30-minute worker schedule, so each run picks it up.
+ */
+export const EMAIL_SETUP_RETRY_MS = 15 * 60_000;
 
 const handlers: { [K in JobType]: (payload: JobHandlers[K], idempotencyKey: string) => Promise<void> } = {
   "email.send": async (payload, key) => {
@@ -64,8 +80,18 @@ function isRetryable(error: unknown): boolean {
 }
 
 /** Runs a claimed job and records the outcome. Returns how it ended. */
-async function execute(job: JobRow): Promise<"succeeded" | "retry" | "dead" | "deferred"> {
+async function execute(job: JobRow): Promise<"succeeded" | "retry" | "dead" | "deferred" | "dropped"> {
   const supabase = createSupabaseAdminClient();
+  // The app clock is close enough for a two-week limit.
+  const maxAge = MAX_AGE_MS[job.job_type];
+  if (maxAge && job.created_at && Date.now() - new Date(job.created_at).getTime() > maxAge) {
+    await supabase.from("jobs").delete().eq("id", job.id);
+    logger.warn(
+      { jobId: job.id, type: job.job_type, queuedAt: job.created_at },
+      "job dropped: it waited over two weeks, too long to still be useful",
+    );
+    return "dropped";
+  }
   const handler = handlers[job.job_type as JobType] as
     ((payload: unknown, key: string) => Promise<void>) | undefined;
   try {
@@ -79,6 +105,12 @@ async function execute(job: JobRow): Promise<"succeeded" | "retry" | "dead" | "d
     if (error instanceof CircuitOpenError) {
       // The provider is down: wait without using up an attempt.
       await supabase.rpc("defer_job", { p_id: job.id, p_retry_in_ms: CIRCUIT_RETRY_MS });
+      return "deferred";
+    }
+    if (error instanceof EmailNotConfiguredError) {
+      // Email isn't set up yet: keep it waiting, without using up an attempt.
+      // emailConfigured() has already said so in the logs once.
+      await supabase.rpc("defer_job", { p_id: job.id, p_retry_in_ms: EMAIL_SETUP_RETRY_MS });
       return "deferred";
     }
     const message = error instanceof Error ? error.message : String(error);
@@ -112,6 +144,7 @@ export interface DrainResult {
   retried: number;
   dead: number;
   deferred: number;
+  dropped: number;
   released: number;
 }
 
@@ -123,7 +156,15 @@ export interface DrainResult {
 export async function drainQueue(worker: string, budgetMs = 45_000, batchSize = 10): Promise<DrainResult> {
   const supabase = createSupabaseAdminClient();
   const started = Date.now();
-  const result: DrainResult = { claimed: 0, succeeded: 0, retried: 0, dead: 0, deferred: 0, released: 0 };
+  const result: DrainResult = {
+    claimed: 0,
+    succeeded: 0,
+    retried: 0,
+    dead: 0,
+    deferred: 0,
+    dropped: 0,
+    released: 0,
+  };
   const { data: released } = await supabase.rpc("release_stale_jobs", { p_older_than_seconds: 900 });
   result.released = released ?? 0;
 
@@ -138,6 +179,7 @@ export async function drainQueue(worker: string, budgetMs = 45_000, batchSize = 
       if (outcome === "succeeded") result.succeeded++;
       else if (outcome === "retry") result.retried++;
       else if (outcome === "dead") result.dead++;
+      else if (outcome === "dropped") result.dropped++;
       else result.deferred++;
     }
     if (jobs.length < batchSize) break;

@@ -4,8 +4,17 @@ import pino from "pino";
 // Structured JSON logs (item 59). Vercel and Docker both collect stdout.
 // Secrets and personal data are redacted by path; file contents are never
 // logged at all.
+const LEVELS = ["fatal", "error", "warn", "info", "debug", "trace", "silent"];
+// pino throws on an unknown level, so a mistyped LOG_LEVEL falls back to the default.
+const requestedLevel = process.env.LOG_LEVEL?.trim().toLowerCase();
+
 export const logger = pino({
-  level: process.env.LOG_LEVEL ?? (process.env.NODE_ENV === "test" ? "silent" : "info"),
+  level:
+    requestedLevel && LEVELS.includes(requestedLevel)
+      ? requestedLevel
+      : process.env.NODE_ENV === "test"
+        ? "silent"
+        : "info",
   base: { service: "awlel-web", env: process.env.VERCEL_ENV ?? process.env.NODE_ENV },
   timestamp: pino.stdTimeFunctions.isoTime,
   formatters: { level: (label) => ({ level: label }) },

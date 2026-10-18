@@ -4,7 +4,7 @@ import { evaluateAlerts, type OpsSnapshot } from "@/lib/ops/alerts";
 import { serverEnv } from "@/lib/env.server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/lib/supabase/database.types";
-import { sendEmail } from "./email";
+import { emailConfigured, sendEmail } from "./email";
 import { siteUrl } from "@/lib/env.public";
 import { checkDependencies } from "./health";
 import { drainQueue } from "./jobs";
@@ -112,7 +112,9 @@ const handlers: Record<TaskName, (holder: string) => Promise<Detail>> = {
   alerts: async () => {
     const snapshot = await opsSnapshot();
     const alerts = evaluateAlerts(snapshot);
-    const to = serverEnv().ALERT_EMAIL;
+    // Without email set up the alerts are only logged (and shown on Admin →
+    // Operations); emailConfigured() says so in the logs once.
+    const to = emailConfigured() ? serverEnv().ALERT_EMAIL : undefined;
     for (const alert of alerts) {
       logger.error({ alert: alert.key }, `ALERT: ${alert.title}`);
       if (!to) continue;
