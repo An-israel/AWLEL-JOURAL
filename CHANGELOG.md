@@ -6,6 +6,62 @@ All notable changes to this project are documented here. The project follows
 
 ## [Unreleased]
 
+### Fixes from the full site audit (18 October 2026)
+
+87 of the 88 problems found in a full check of the site were fixed (#43, paging in the public data API,
+was left as it is). Database updates 13–17 add them; run the latest `production-setup.sql` once.
+
+#### Going live (#1–17)
+
+- Backups are no longer kept as GitHub artifacts, which anyone could download from a public repository;
+  they go to Google Drive only. The backup job skips quietly until it is set up.
+- Emails wait in the queue until email (Resend) is set up instead of being lost; emails older than two
+  weeks are dropped. An email key without a sender address counts as "not set up".
+- A typo in an optional setting no longer breaks sign-in, the contact form and submissions.
+- Published files are limited to 50 MB, the most Supabase's free plan accepts.
+- Background jobs fail clearly when the site address redirects, and keep their schedules switched on.
+- The launch guide now covers: email set-up as a required step, copy-paste Supabase email templates,
+  exact redirect addresses (no `*.vercel.app` wildcard), the function region, Supabase pausing and the
+  Vercel plans. The runbook works from the Supabase, Vercel and GitHub websites. `migrate.yml` is gone.
+
+#### Public website (#18–42)
+
+- The contact form no longer throws away a message corrected after an error.
+- Unconfirmed placeholder text is hidden from the public until it is replaced.
+- Missing articles and issues return a real 404 status on the first visit.
+- Old issues show their issue's date rather than the upload date; citations without a DOI end with the
+  article's address; an optional licence setting is shown on articles and in their metadata.
+- On phones, Download and Cite sit under the authors, and the PDF opens in a new tab.
+- Search: stable order across pages, readable snippets, literal author names, "Clear filters", pages and
+  a PDF link per result. A `/categories` page, paged subject pages, and archived subjects keep working.
+- Plurals, the phone menu, the Cite panel keyboard, Nigerian initials, journal names from Settings, and
+  noisy search logs fixed.
+
+#### Sign-in, submissions and peer review (#44–67)
+
+- Invitations and sign-in links work with Supabase's default emails and say what to do when opened on
+  another device; confirmation emails can be resent; sign-in limits suit shared campus networks.
+- `.DOCX` in capitals and Word files without a reported type are accepted; retries don't duplicate files;
+  unfinished submissions can be completed; author names are removed from Word file properties.
+- Authors answer revision requests with a response to the reviewers, can withdraw a submission, edit its
+  details while waiting, and get a revision due date with reminders.
+- Editors' notes are saved and emailed. Status changes follow allowed steps, publishing the article
+  updates the submission, decisions close open reviews, and review rounds let a revised paper go back to
+  the same reviewers. Reviewers accept or decline, and can write confidential comments to the editors.
+  Editors can share reviewers' comments with the author anonymously. Decision emails were rewritten.
+
+#### Admin (#68–88)
+
+- Saving a published article or issue no longer erases its publication date.
+- Publishing an issue shows a checklist (no articles, no cover, missing PDFs); drafts stay drafts unless
+  ticked. Leaving a page with unsaved changes asks first.
+- Bulk upload gives repeated titles their own addresses and asks before replacing a PDF. Volumes can be
+  edited and deleted, binned issues deleted for good, and renumbered issues and renamed subjects keep
+  their old addresses.
+- Pages keep a history with Restore; content edits appear in the Audit Log in plain words.
+- Plain-English labels and messages, role descriptions, confirmations for feature switches and
+  Operations, and phone layouts for bulk upload and Users.
+
 ### Milestone 9: Polish and launch
 
 #### Security (from a review of every action, route, policy and database function)
