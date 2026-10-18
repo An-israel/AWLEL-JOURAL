@@ -8,9 +8,10 @@ import { DownloadLinks } from "@/components/catalog/download-links";
 import { IssueCover } from "@/components/catalog/issue-cover";
 import { RichText } from "@/components/catalog/rich-text";
 import { JsonLd } from "@/components/seo/json-ld";
-import { getIssue, getPublishedIssues } from "@/lib/data/catalog";
+import { getIssue, getPublishedIssues, type IssueDetail } from "@/lib/data/catalog";
 import { getSiteSettings } from "@/lib/data/site-settings";
 import { siteUrl } from "@/lib/env.public";
+import { plural } from "@/lib/plural";
 import { issueLd } from "@/lib/seo/json-ld";
 import { issueDownloadPath } from "@/lib/storage";
 
@@ -35,23 +36,23 @@ export async function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const issue = await load(params);
+  const [issue, settings] = await Promise.all([load(params), getSiteSettings()]);
   if (!issue) return { title: "Issue not found" };
-  const description = `${issue.articles.length} articles in ${issue.label} of AWLEL: African, World Literature and English Language.`;
+  const description = `${plural(issue.articles.length, "article")} in ${issue.label} of ${settings.shortName}: ${settings.journalName}.`;
+  const title = `${settings.shortName} ${issue.label}`;
   return {
     title: issue.label,
     description,
     alternates: { canonical: issue.path },
-    openGraph: { title: `AWLEL ${issue.label}`, description, url: issue.path },
-    twitter: { card: "summary_large_image", title: `AWLEL ${issue.label}`, description },
+    openGraph: { title, description, url: issue.path },
+    twitter: { card: "summary_large_image", title, description },
   };
 }
 
 const dateFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
-async function IssueContent({ params }: { params: Props["params"] }) {
-  const [issue, settings] = await Promise.all([load(params), getSiteSettings()]);
-  if (!issue) notFound();
+async function IssueContent({ issue }: { issue: IssueDetail }) {
+  const settings = await getSiteSettings();
   const structured = issueLd(
     {
       name: settings.journalName,
@@ -154,7 +155,7 @@ async function IssueContent({ params }: { params: Props["params"] }) {
           <h2 id="contents-title" className="text-2xl">
             Contents
           </h2>
-          <span className="text-sm text-ink-muted">{issue.articles.length} articles</span>
+          <span className="text-sm text-ink-muted">{plural(issue.articles.length, "article")}</span>
         </div>
         {issue.articles.length > 0 ? (
           <div className="divide-y divide-line">
@@ -220,10 +221,15 @@ function IssueSkeleton() {
   );
 }
 
-export default function IssuePage({ params }: Props) {
+export default async function IssuePage({ params }: Props) {
+  // Checked before anything streams, so a missing issue gets a real 404
+  // status rather than a 200 page (item 20). The lookup is cached.
+  const issue = await load(params);
+  if (!issue) notFound();
+
   return (
     <Suspense fallback={<IssueSkeleton />}>
-      <IssueContent params={params} />
+      <IssueContent issue={issue} />
     </Suspense>
   );
 }

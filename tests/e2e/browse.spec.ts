@@ -85,9 +85,26 @@ test("home shows the latest issue, categories and most read", async ({ page }) =
   await expect(page.getByRole("heading", { name: "Most read" })).toBeVisible();
 });
 
-test("unknown article and issue return 404 content", async ({ page }) => {
-  await page.goto("/articles/no-such-article");
+test("unknown article and issue return a real 404", async ({ page }) => {
+  // A fresh slug each run, so the very first (uncached) visit is the one tested.
+  const response = await page.goto(`/articles/no-such-article-${Date.now()}`);
+  expect(response?.status()).toBe(404);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("This page could not be found");
-  await page.goto("/issues/99/9");
+  const issue = await page.goto(`/issues/99/${Math.floor(Math.random() * 900) + 10}`);
+  expect(issue?.status()).toBe(404);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("This page could not be found");
+});
+
+test("the cite panel opens on the article's own citation style", async ({ page }) => {
+  // The sample memory article is written in MLA.
+  await page.goto("/articles/sample-memory-migration-and-the-postcolonial-archive");
+  const cite = page.getByRole("region", { name: "Cite this article" });
+  await expect(cite.getByRole("tab", { name: "MLA 8th" })).toHaveAttribute("aria-selected", "true");
+  await expect(cite.getByRole("tabpanel")).toContainText("Okeke, Ngozi A.");
+  await expect(page.getByText("Citation style")).toHaveCount(0);
+
+  // Arrow keys move focus along with the selection.
+  await cite.getByRole("tab", { name: "MLA 8th" }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(cite.getByRole("tab", { name: "BibTeX" })).toBeFocused();
 });

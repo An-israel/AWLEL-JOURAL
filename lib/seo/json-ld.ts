@@ -83,6 +83,8 @@ export interface ArticleLd {
   doi: string | null;
   pdfUrl: string | null;
   imageUrl?: string;
+  /** The licence's URL (preferred) or name, when one is set in Settings. */
+  license?: string | null;
 }
 
 export function scholarlyArticleLd(j: JournalLd, i: IssueLd, a: ArticleLd): Thing {
@@ -118,6 +120,7 @@ export function scholarlyArticleLd(j: JournalLd, i: IssueLd, a: ArticleLd): Thin
       ? { encoding: { "@type": "MediaObject", encodingFormat: "application/pdf", contentUrl: a.pdfUrl } }
       : {}),
     ...(a.imageUrl ? { image: a.imageUrl } : {}),
+    ...(a.license ? { license: a.license } : {}),
     publisher: { "@type": "Organization", name: j.publisher },
     isPartOf: issueLd(j, i),
   };

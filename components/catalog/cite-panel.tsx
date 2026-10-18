@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Copy, FileDown } from "lucide-react";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { FormattedCitation } from "@/lib/citations";
 
 type Tab = "apa" | "mla" | "bibtex";
@@ -29,27 +29,42 @@ export function CitePanel({
   bibtex,
   ris,
   risFileName,
+  defaultStyle = "apa",
 }: {
   apa: FormattedCitation;
   mla: FormattedCitation;
   bibtex: string;
   ris: string;
   risFileName: string;
+  /** The article's own citation style, shown first. */
+  defaultStyle?: "apa" | "mla";
 }) {
-  const [tab, setTab] = useState<Tab>("apa");
+  const [tab, setTab] = useState<Tab>(defaultStyle);
   const [copied, setCopied] = useState<Tab | null>(null);
+  const [copyFailed, setCopyFailed] = useState(false);
+  const tabs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
   const id = useId();
 
   const current = tab === "bibtex" ? null : tab === "apa" ? apa : mla;
+
+  function selectTab(next: Tab, focus = false) {
+    setTab(next);
+    setCopyFailed(false);
+    // Arrow keys move focus with the selection (WAI-ARIA tabs pattern).
+    if (focus) tabs.current[next]?.focus();
+  }
 
   async function copy() {
     try {
       if (current) await copyRich(current.plain, current.html);
       else await copyRich(bibtex);
+      setCopyFailed(false);
       setCopied(tab);
       setTimeout(() => setCopied(null), 2000);
     } catch {
+      // Clipboard access can be blocked (browser settings, older browsers).
       setCopied(null);
+      setCopyFailed(true);
     }
   }
 
@@ -59,7 +74,8 @@ export function CitePanel({
     a.href = url;
     a.download = risFileName;
     a.click();
-    URL.revokeObjectURL(url);
+    // Some browsers start the download after click() returns; free the file a moment later.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   return (
@@ -74,15 +90,20 @@ export function CitePanel({
             role="tab"
             type="button"
             id={`${id}-tab-${key}`}
+            ref={(el) => {
+              tabs.current[key] = el;
+            }}
             aria-selected={tab === key}
             aria-controls={`${id}-panel`}
             tabIndex={tab === key ? 0 : -1}
-            onClick={() => setTab(key)}
+            onClick={() => selectTab(key)}
             onKeyDown={(e) => {
               const keys = Object.keys(LABELS) as Tab[];
               const i = keys.indexOf(tab);
-              if (e.key === "ArrowRight") setTab(keys[(i + 1) % keys.length]);
-              if (e.key === "ArrowLeft") setTab(keys[(i + keys.length - 1) % keys.length]);
+              if (e.key === "ArrowRight") selectTab(keys[(i + 1) % keys.length], true);
+              if (e.key === "ArrowLeft") selectTab(keys[(i + keys.length - 1) % keys.length], true);
+              if (e.key === "Home") selectTab(keys[0], true);
+              if (e.key === "End") selectTab(keys[keys.length - 1], true);
             }}
             className={`-mb-px border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${
               tab === key ? "border-coral text-navy" : "border-transparent text-ink-muted hover:text-ink"
@@ -126,6 +147,11 @@ export function CitePanel({
             Download .ris
           </button>
         </div>
+        {copyFailed ? (
+          <p role="alert" className="mt-3 text-sm text-coral-ink">
+            Couldn’t copy — select the text and copy it.
+          </p>
+        ) : null}
         <p className="sr-only" aria-live="polite">
           {copied ? `${LABELS[copied]} citation copied to clipboard` : ""}
         </p>

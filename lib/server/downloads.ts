@@ -15,6 +15,15 @@ import { recordEvent } from "./metrics";
  * the download, then redirects to a one-minute signed URL whose
  * Content-Disposition carries a clean file name. Files are never streamed
  * through the function (item 41).
+ *
+ * Google Scholar (audit item 25): article pages give this route as
+ * citation_pdf_url, and Scholar follows the redirect, so published PDFs are
+ * not marked noindex. Streaming the bytes from the site's own domain was
+ * weighed and left out: a buffered Vercel Function response is capped at
+ * 4.5 MB (scanned back issues are larger); streaming every read through a
+ * function costs compute time and bandwidth that the storage CDN serves for
+ * free; and the site-wide X-Frame-Options: DENY would stop the inline
+ * preview from framing a same-site PDF. Only Word files stay noindex.
  */
 
 export type DownloadFormat = "pdf" | "docx";
@@ -32,7 +41,12 @@ const storageUnavailable = () =>
     },
   );
 
-async function redirectToFile(fileId: string, fileName: string, inline: boolean): Promise<Response> {
+async function redirectToFile(
+  fileId: string,
+  fileName: string,
+  inline: boolean,
+  format: DownloadFormat,
+): Promise<Response> {
   const admin = createSupabaseAdminClient();
   const { data: file, error: lookupError } = await admin
     .from("stored_files")
@@ -48,9 +62,11 @@ async function redirectToFile(fileId: string, fileName: string, inline: boolean)
     logger.error({ err: error?.message, bucket: file.bucket }, "could not sign a download URL");
     throw storageUnavailable();
   }
+  // Only published items reach this point (RLS and the published-issue list).
+  // Their PDFs may be indexed; Word copies are for downloading only.
   return NextResponse.redirect(data.signedUrl, {
     status: 302,
-    headers: { "Cache-Control": "no-store", "X-Robots-Tag": "noindex" },
+    headers: { "Cache-Control": "no-store", ...(format === "pdf" ? {} : { "X-Robots-Tag": "noindex" }) },
   });
 }
 
@@ -87,7 +103,7 @@ export async function downloadArticle(
   if (!inline) {
     await recordEvent(headers, format === "pdf" ? "download_pdf" : "download_docx", { articleId });
   }
-  return redirectToFile(fileId, fileName, inline);
+  return redirectToFile(fileId, fileName, inline, format);
 }
 
 /** /api/download/issue/[id]?format=pdf|docx */
@@ -107,5 +123,5 @@ export async function downloadIssue(
   if (!fileId) throw notFound("This file is not available.");
 
   await recordEvent(headers, format === "pdf" ? "download_pdf" : "download_docx", { issueId });
-  return redirectToFile(fileId, `AWLEL_${issueFileStem(issue)}_Full_Issue.${format}`, false);
+  return redirectToFile(fileId, `AWLEL_${issueFileStem(issue)}_Full_Issue.${format}`, false, format);
 }
