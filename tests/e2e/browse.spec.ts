@@ -56,8 +56,26 @@ test("category page lists its articles and sorts by most read", async ({ page })
   await page.goto("/categories/african-literature");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("African Literature");
   await expect(page.getByRole("article")).toHaveCount(1);
-  await page.getByRole("button", { name: "Most read" }).click();
-  await expect(page.getByRole("button", { name: "Most read" })).toHaveAttribute("aria-pressed", "true");
+  const sort = page.getByRole("navigation", { name: "Sort articles" });
+  await sort.getByRole("link", { name: "Most read" }).click();
+  await expect(page).toHaveURL(/\/categories\/african-literature\?sort=read$/);
+  await expect(sort.getByRole("link", { name: "Most read" })).toHaveAttribute("aria-current", "true");
+
+  // The breadcrumb leads to the list of every subject.
+  await page
+    .getByRole("navigation", { name: "Breadcrumb" })
+    .getByRole("link", { name: "Categories" })
+    .click();
+  await expect(page).toHaveURL(/\/categories$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Subject areas");
+  await expect(page.getByRole("region", { name: "Subject areas" }).getByRole("link")).toHaveCount(10);
+});
+
+test("a page past the end of a category says how many pages there are", async ({ page }) => {
+  const response = await page.goto("/categories/african-literature?page=5");
+  expect(response?.status()).toBe(200);
+  await expect(page.getByText("There is only 1 page of results")).toBeVisible();
+  expect((await page.goto("/categories/no-such-subject"))?.status()).toBe(404);
 });
 
 test("search finds articles by keyword and author, with highlights and filters", async ({ page }) => {
@@ -75,6 +93,33 @@ test("search finds articles by keyword and author, with highlights and filters",
   await expect(page.getByRole("heading", { name: "No articles found" })).toBeVisible();
 });
 
+test("the phone menu offers the account link and closes on the current page's link", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 800 });
+  await page.goto("/about");
+  await page.getByRole("button", { name: "Open menu" }).click();
+  const menu = page.getByRole("dialog", { name: "Menu" });
+  await expect(menu.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/login");
+  await menu.getByRole("link", { name: "About the Journal" }).click();
+  await expect(menu).toBeHidden();
+});
+
+test("search edge cases: literal author names, pages past the end, clearing filters", async ({ page }) => {
+  // % and _ are matched literally, not as wildcards.
+  await page.goto("/search?author=%25");
+  await expect(page.getByRole("heading", { name: "No articles found" })).toBeVisible();
+  await page.goto("/search?author=_");
+  await expect(page.getByRole("heading", { name: "No articles found" })).toBeVisible();
+
+  await page.goto("/search?q=Igbo&page=3");
+  await expect(page.getByRole("heading", { name: "1 article found" })).toBeVisible();
+  await expect(page.getByText("There is only 1 page of results")).toBeVisible();
+
+  await page.goto("/search?q=Igbo&category=linguistics");
+  await page.getByRole("link", { name: "Clear filters" }).click();
+  await expect(page).toHaveURL(/\/search\?q=Igbo$/);
+  await expect(page.getByRole("link", { name: "Clear filters" })).toHaveCount(0);
+});
+
 test("home shows the latest issue, categories and most read", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("link", { name: "Read the latest issue" })).toHaveAttribute(
@@ -85,9 +130,26 @@ test("home shows the latest issue, categories and most read", async ({ page }) =
   await expect(page.getByRole("heading", { name: "Most read" })).toBeVisible();
 });
 
-test("unknown article and issue return 404 content", async ({ page }) => {
-  await page.goto("/articles/no-such-article");
+test("unknown article and issue return a real 404", async ({ page }) => {
+  // A fresh slug each run, so the very first (uncached) visit is the one tested.
+  const response = await page.goto(`/articles/no-such-article-${Date.now()}`);
+  expect(response?.status()).toBe(404);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("This page could not be found");
-  await page.goto("/issues/99/9");
+  const issue = await page.goto(`/issues/99/${Math.floor(Math.random() * 900) + 10}`);
+  expect(issue?.status()).toBe(404);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("This page could not be found");
+});
+
+test("the cite panel opens on the article's own citation style", async ({ page }) => {
+  // The sample memory article is written in MLA.
+  await page.goto("/articles/sample-memory-migration-and-the-postcolonial-archive");
+  const cite = page.getByRole("region", { name: "Cite this article" });
+  await expect(cite.getByRole("tab", { name: "MLA 8th" })).toHaveAttribute("aria-selected", "true");
+  await expect(cite.getByRole("tabpanel")).toContainText("Okeke, Ngozi A.");
+  await expect(page.getByText("Citation style")).toHaveCount(0);
+
+  // Arrow keys move focus along with the selection.
+  await cite.getByRole("tab", { name: "MLA 8th" }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(cite.getByRole("tab", { name: "BibTeX" })).toBeFocused();
 });

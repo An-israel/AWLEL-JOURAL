@@ -58,13 +58,15 @@ function Field({
 export function ContactForm() {
   const [state, action, pending] = useActionState(submitContact, initial);
   const startedAt = useRef<HTMLInputElement>(null);
+  const openedAt = useRef(0);
   const status = useRef<HTMLDivElement>(null);
 
   // Records when the visitor started filling in the form (bot time-trap).
+  // React resets the form after every attempt, which would put the hidden
+  // field back to 0, so it is restored after each one too.
   useEffect(() => {
-    if (startedAt.current) startedAt.current.value = String(Date.now());
-  }, []);
-  useEffect(() => {
+    openedAt.current ||= state.startedAt ?? Date.now();
+    if (startedAt.current) startedAt.current.value = String(openedAt.current);
     if (state.status !== "idle") status.current?.focus();
   }, [state]);
 
@@ -128,7 +130,7 @@ export function ContactForm() {
         <label htmlFor="contact-website">Website</label>
         <input id="contact-website" name="website" type="text" tabIndex={-1} autoComplete="off" />
       </div>
-      <input ref={startedAt} type="hidden" name="started_at" defaultValue="0" />
+      <input ref={startedAt} type="hidden" name="started_at" defaultValue={state.startedAt ?? 0} />
 
       <div className="flex flex-wrap items-center justify-between gap-4">
         <p className="text-xs text-ink-muted">

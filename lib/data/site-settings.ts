@@ -17,9 +17,17 @@ export interface SiteSettings {
   socialLinks: Record<string, string>;
   logoUrl: string | null;
   ogImageUrl: string | null;
+  /** The articles' licence, once confirmed in Settings; null shows nothing. */
+  licence: { name: string; url: string | null } | null;
 }
 
-const FALLBACK: SiteSettings = { ...SITE_DEFAULTS, socialLinks: {}, logoUrl: null, ogImageUrl: null };
+const FALLBACK: SiteSettings = {
+  ...SITE_DEFAULTS,
+  socialLinks: {},
+  logoUrl: null,
+  ogImageUrl: null,
+  licence: null,
+};
 
 /** Journal details from the database, cached until Settings are saved. */
 export async function getSiteSettings(): Promise<SiteSettings> {
@@ -29,7 +37,7 @@ export async function getSiteSettings(): Promise<SiteSettings> {
   const { data, error } = await createSupabasePublicClient()
     .from("site_settings")
     .select(
-      "journal_name, journal_short_name, subtitle, issn, publisher, contact_email, postal_address, social_links, logo:stored_files!site_settings_logo_file_id_fkey(path), og:stored_files!site_settings_default_og_image_file_id_fkey(path)",
+      "journal_name, journal_short_name, subtitle, issn, publisher, contact_email, postal_address, license_name, license_url, social_links, logo:stored_files!site_settings_logo_file_id_fkey(path), og:stored_files!site_settings_default_og_image_file_id_fkey(path)",
     )
     .eq("id", 1)
     .maybeSingle();
@@ -53,5 +61,6 @@ export async function getSiteSettings(): Promise<SiteSettings> {
     socialLinks: (data.social_links ?? {}) as Record<string, string>,
     logoUrl: data.logo ? publicStorageUrl("site-assets", data.logo.path) : null,
     ogImageUrl: data.og ? publicStorageUrl("site-assets", data.og.path) : null,
+    licence: data.license_name ? { name: data.license_name, url: data.license_url } : null,
   };
 }

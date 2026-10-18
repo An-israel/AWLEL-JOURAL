@@ -15,7 +15,7 @@ async function Content() {
     supabase
       .from("site_settings")
       .select(
-        `version, journal_name, journal_short_name, subtitle, issn, publisher, contact_email, postal_address, publication_frequency, social_links,
+        `version, journal_name, journal_short_name, subtitle, issn, publisher, contact_email, postal_address, publication_frequency, license_name, license_url, social_links,
          logo:stored_files!site_settings_logo_file_id_fkey(${FILE_COLUMNS}),
          og:stored_files!site_settings_default_og_image_file_id_fkey(${FILE_COLUMNS})`,
       )
@@ -40,6 +40,8 @@ async function Content() {
         contactEmail: s.contact_email,
         postalAddress: s.postal_address ?? "",
         publicationFrequency: s.publication_frequency ?? "",
+        licenseName: s.license_name ?? "",
+        licenseUrl: s.license_url ?? "",
         social: {
           x: social.x ?? "",
           facebook: social.facebook ?? "",

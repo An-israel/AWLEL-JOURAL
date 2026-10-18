@@ -1,11 +1,23 @@
+import { FileText } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { connection } from "next/server";
 import { Suspense } from "react";
 import { authorLine } from "@/components/catalog/author-names";
 import { CategoryTag } from "@/components/catalog/category-tag";
 import { Highlight } from "@/components/catalog/highlight";
-import { getArticlesByIds, getCategoriesWithCounts, getPublishedIssues } from "@/lib/data/catalog";
+import { pageRange } from "@/components/catalog/page-range";
+import { Pagination, PastTheEnd } from "@/components/catalog/pagination";
+import {
+  getArticlesByIds,
+  getCategoriesWithCounts,
+  getPublishedIssues,
+  type IssueSummary,
+} from "@/lib/data/catalog";
 import { SEARCH_PAGE_SIZE, searchArticles, searchParamsSchema, type SearchParams } from "@/lib/data/search";
+import { plural } from "@/lib/plural";
+import { isPrerenderAbort } from "@/lib/search-text";
+import { articleDownloadPath } from "@/lib/storage";
 
 export const metadata: Metadata = {
   title: "Search",
@@ -15,6 +27,15 @@ export const metadata: Metadata = {
 };
 
 type Props = PageProps<"/search">;
+
+/**
+ * The URL's search, made consistent: an issue already fixes the year, so a
+ * year chosen alongside it is dropped rather than contradicting it (item 42).
+ */
+function readParams(raw: unknown): SearchParams {
+  const params = searchParamsSchema.parse(raw);
+  return params.issue ? { ...params, year: undefined } : params;
+}
 
 function hrefWith(params: SearchParams, page: number): string {
   const qs = new URLSearchParams();
@@ -30,9 +51,12 @@ async function SearchForm({ searchParams }: { searchParams: Props["searchParams"
     getPublishedIssues(),
     getCategoriesWithCounts(),
   ]);
-  const params = searchParamsSchema.parse(raw);
+  const params = readParams(raw);
   const years = [...new Set(issues.map((i) => i.year))].sort((a, b) => b - a);
+  const byYear = new Map<number, IssueSummary[]>();
+  for (const issue of issues) byYear.set(issue.year, [...(byYear.get(issue.year) ?? []), issue]);
   const field = "mt-1.5 block w-full rounded-md border border-line bg-white px-3 py-2.5 text-ink";
+  const filtered = Boolean(params.year || params.issue || params.category || params.author);
 
   return (
     <form role="search" action="/search" className="rounded-lg border border-line bg-white p-5 sm:p-6">
@@ -68,14 +92,26 @@ async function SearchForm({ searchParams }: { searchParams: Props["searchParams"
         </label>
         <label className="text-sm text-ink-muted">
           Volume / issue
-          <select name="issue" defaultValue={params.issue ?? ""} className={field}>
+          <select
+            name="issue"
+            defaultValue={params.issue ?? ""}
+            className={field}
+            aria-describedby="issue-hint"
+          >
             <option value="">Any issue</option>
-            {issues.map((i) => (
-              <option key={i.id} value={i.id}>
-                {i.label}
-              </option>
+            {years.map((y) => (
+              <optgroup key={y} label={String(y)}>
+                {(byYear.get(y) ?? []).map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.label}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
+          <span id="issue-hint" className="mt-1 block text-xs">
+            An issue already sets the year.
+          </span>
         </label>
         <label className="text-sm text-ink-muted">
           Category
@@ -99,21 +135,36 @@ async function SearchForm({ searchParams }: { searchParams: Props["searchParams"
           />
         </label>
       </fieldset>
+      {filtered ? (
+        <p className="mt-4 text-sm">
+          <Link
+            href={params.q ? `/search?q=${encodeURIComponent(params.q)}` : "/search"}
+            className="font-semibold"
+          >
+            Clear filters
+          </Link>
+        </p>
+      ) : null}
     </form>
   );
 }
 
 async function SearchResults({ searchParams }: { searchParams: Props["searchParams"] }) {
-  const params = searchParamsSchema.parse(await searchParams);
+  const params = readParams(await searchParams);
   const hasFilters = Boolean(params.q || params.year || params.issue || params.category || params.author);
   if (!hasFilters) {
     return <p className="mt-10 text-ink-muted">Enter a search term or choose a filter to find articles.</p>;
   }
+  // Results are never cached, so they belong to a real visit only. Without
+  // this, a background prefetch of a /search link started the query and
+  // Next.js then cut it off, logging a spurious "search failed" (item 39).
+  await connection();
 
   let result: Awaited<ReturnType<typeof searchArticles>>;
   try {
     result = await searchArticles(params);
-  } catch {
+  } catch (error) {
+    if (isPrerenderAbort(error)) throw error;
     return (
       <p role="alert" className="mt-10 rounded-lg border border-coral/40 bg-[#FDECEF] p-5 text-[#A3283C]">
         Search is temporarily unavailable. Please try again in a moment.
@@ -133,28 +184,39 @@ async function SearchResults({ searchParams }: { searchParams: Props["searchPara
   return (
     <section aria-labelledby="results-title" className="mt-10">
       <h2 id="results-title" className="border-b-2 border-navy pb-3 text-lg font-semibold" aria-live="polite">
-        {result.total === 0
-          ? "No articles found"
-          : `${result.total} ${result.total === 1 ? "article" : "articles"} found`}
+        {result.total === 0 ? "No articles found" : `${plural(result.total, "article")} found`}
       </h2>
       {result.total === 0 ? (
         <p className="mt-6 text-ink-muted">
           Try fewer or different words, check the spelling, or remove a filter. You can also{" "}
           <Link href="/issues">browse the archive</Link>.
         </p>
+      ) : result.hits.length === 0 ? (
+        <PastTheEnd pages={pages} firstHref={hrefWith(params, 1)} />
       ) : (
         <ol className="divide-y divide-line">
           {result.hits.map((hit) => {
             const article = byId.get(hit.id);
             const issue = article ? issueById.get(article.issueId) : undefined;
+            const pagesText = article ? pageRange(article.firstPage, article.lastPage) : null;
             return (
               <li key={hit.id} className="py-6">
-                <div className="flex flex-wrap items-center gap-3 text-sm text-ink-muted">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-muted">
                   {article?.category ? <CategoryTag category={article.category} /> : null}
                   {issue ? (
                     <Link href={issue.path} className="text-ink-muted hover:text-navy">
                       {issue.label}
                     </Link>
+                  ) : null}
+                  {pagesText ? <span>{pagesText}</span> : null}
+                  {article?.hasPdf ? (
+                    <a
+                      href={articleDownloadPath(article.id, "pdf")}
+                      className="inline-flex items-center gap-1 font-semibold text-navy hover:text-royal"
+                    >
+                      <FileText aria-hidden className="size-3.5" />
+                      PDF<span className="sr-only"> of {article.title}</span>
+                    </a>
                   ) : null}
                 </div>
                 <h3 className="mt-2 text-lg font-semibold sm:text-xl">
@@ -176,29 +238,13 @@ async function SearchResults({ searchParams }: { searchParams: Props["searchPara
           })}
         </ol>
       )}
-      {pages > 1 ? (
-        <nav
-          aria-label="Search results pages"
-          className="mt-8 flex items-center justify-between border-t border-line pt-6"
-        >
-          {page > 1 ? (
-            <Link href={hrefWith(params, page - 1)} rel="prev" className="font-semibold">
-              ← Previous
-            </Link>
-          ) : (
-            <span />
-          )}
-          <span className="text-sm text-ink-muted">
-            Page {page} of {pages}
-          </span>
-          {page < pages ? (
-            <Link href={hrefWith(params, page + 1)} rel="next" className="font-semibold">
-              Next →
-            </Link>
-          ) : (
-            <span />
-          )}
-        </nav>
+      {result.hits.length > 0 ? (
+        <Pagination
+          page={page}
+          pages={pages}
+          label="Search results pages"
+          hrefFor={(p) => hrefWith(params, p)}
+        />
       ) : null}
     </section>
   );

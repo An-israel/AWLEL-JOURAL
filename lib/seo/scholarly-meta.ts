@@ -2,11 +2,19 @@
 // page (section 11). Returned as ordered [name, content] pairs because order
 // matters: each citation_author_institution must follow its citation_author.
 
+import { scholarPublicationDate, type PublicationDate } from "@/lib/publication-date";
+
+export interface Licence {
+  /** e.g. "CC BY 4.0" */
+  name: string;
+  url: string | null;
+}
+
 export interface ScholarlyArticleMeta {
   title: string;
   authors: { fullName: string; affiliation: string | null; orcid: string | null }[];
-  /** ISO timestamp the article was published (falls back to the issue year). */
-  publishedAt: string | null;
+  /** From articlePublicationDate(): the issue's date for back-catalogue uploads. */
+  published: PublicationDate;
   year: number;
   journal: string;
   journalAbbrev: string;
@@ -23,14 +31,11 @@ export interface ScholarlyArticleMeta {
   url: string;
   pdfUrl: string | null;
   docxUrl: string | null;
+  /** The journal's licence from Settings; no rights statement when unset. */
+  licence?: Licence | null;
 }
 
 export type MetaPair = readonly [name: string, content: string];
-
-function scholarDate(m: ScholarlyArticleMeta): string {
-  // Google Scholar wants YYYY/MM/DD (or just YYYY).
-  return m.publishedAt ? m.publishedAt.slice(0, 10).replace(/-/g, "/") : String(m.year);
-}
 
 export function scholarTags(m: ScholarlyArticleMeta): MetaPair[] {
   const tags: MetaPair[] = [["citation_title", m.title]];
@@ -40,7 +45,7 @@ export function scholarTags(m: ScholarlyArticleMeta): MetaPair[] {
     if (a.orcid) tags.push(["citation_author_orcid", `https://orcid.org/${a.orcid}`]);
   }
   tags.push(
-    ["citation_publication_date", scholarDate(m)],
+    ["citation_publication_date", scholarPublicationDate(m.published)],
     ["citation_journal_title", m.journal],
     ["citation_journal_abbrev", m.journalAbbrev],
     ["citation_issn", m.issn],
@@ -61,15 +66,17 @@ export function dublinCoreTags(m: ScholarlyArticleMeta): MetaPair[] {
   const tags: MetaPair[] = [["DC.title", m.title]];
   for (const a of m.authors) tags.push(["DC.creator", a.fullName]);
   tags.push(
-    ["DC.date", m.publishedAt ? m.publishedAt.slice(0, 10) : String(m.year)],
+    ["DC.date", m.published.iso],
     ["DC.publisher", m.publisher],
     ["DC.identifier", m.doi ? `https://doi.org/${m.doi}` : m.url],
     ["DC.source", `${m.journal}, vol. ${m.volume}${m.issue != null ? `, no. ${m.issue}` : ""} (${m.year})`],
     ["DC.source.issn", m.issn],
     ["DC.language", "en"],
     ["DC.type", "Text"],
-    ["DC.rights", "Open access: free to read and download."],
   );
+  if (m.licence) {
+    tags.push(["DC.rights", m.licence.url ? `${m.licence.name} (${m.licence.url})` : m.licence.name]);
+  }
   for (const k of m.keywords) tags.push(["DC.subject", k]);
   if (m.abstract) tags.push(["DC.description", m.abstract.slice(0, 500)]);
   if (m.pdfUrl) tags.push(["DC.format", "application/pdf"]);

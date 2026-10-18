@@ -24,6 +24,9 @@ const settingsSchema = z.object({
   contactEmail: z.email("Enter a valid email address."),
   postalAddress: z.string().trim().max(500).optional(),
   publicationFrequency: z.string().trim().max(200).optional(),
+  // Shown on article pages only once a name is set (item 41).
+  licenseName: z.string().trim().max(120).optional(),
+  licenseUrl: url.optional(),
   social: z.object({ x: url, facebook: url, linkedin: url, website: url }),
 });
 
@@ -47,6 +50,8 @@ export async function saveSettings(
       contact_email: s.contactEmail,
       postal_address: s.postalAddress || null,
       publication_frequency: s.publicationFrequency || null,
+      license_name: s.licenseName || null,
+      license_url: (s.licenseName && s.licenseUrl) || null,
       social_links: Object.fromEntries(Object.entries(s.social).filter(([, v]) => v)),
       updated_by: user.id,
     })

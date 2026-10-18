@@ -1,13 +1,14 @@
 import Image from "next/image";
 import { MONTHS } from "@/lib/issue-label";
 import type { IssueSummary } from "@/lib/data/catalog";
+import { getSiteSettings } from "@/lib/data/site-settings";
 
 /**
  * An issue's cover. Uses the uploaded image when there is one; otherwise a
  * typographic cover in the house style (navy field, diagonal bands), so the
- * archive never shows an empty box.
+ * archive never shows an empty box. The journal's names come from Settings.
  */
-export function IssueCover({
+export async function IssueCover({
   issue,
   sizes,
   priority = false,
@@ -18,6 +19,7 @@ export function IssueCover({
   priority?: boolean;
   className?: string;
 }) {
+  const { shortName, journalName } = await getSiteSettings();
   const frame = `relative aspect-[210/297] overflow-hidden rounded-[3px] bg-navy shadow-[0_1px_2px_rgba(0,0,0,0.12),0_12px_28px_-12px_rgba(17,17,17,0.45)] ${className}`;
 
   if (issue.coverUrl) {
@@ -25,7 +27,7 @@ export function IssueCover({
       <div className={frame}>
         <Image
           src={issue.coverUrl}
-          alt={issue.coverAlt ?? `Cover of AWLEL ${issue.label}`}
+          alt={issue.coverAlt ?? `Cover of ${shortName} ${issue.label}`}
           fill
           sizes={sizes}
           priority={priority}
@@ -37,7 +39,11 @@ export function IssueCover({
 
   const when = issue.month ? `${MONTHS[issue.month - 1]} ${issue.year}` : String(issue.year);
   return (
-    <div className={`${frame} @container text-white`} role="img" aria-label={`Cover of AWLEL ${issue.label}`}>
+    <div
+      className={`${frame} @container text-white`}
+      role="img"
+      aria-label={`Cover of ${shortName} ${issue.label}`}
+    >
       <div className="absolute inset-0 bg-gradient-to-br from-navy to-navy-deep" />
       <div
         className="absolute inset-x-0 bottom-0 h-[42%]"
@@ -48,7 +54,7 @@ export function IssueCover({
       </div>
       <div className="relative flex h-full flex-col p-[8cqw]">
         <span className="font-bold tracking-tight" style={{ fontSize: "17cqw", lineHeight: 0.95 }}>
-          AWLEL
+          {shortName}
         </span>
         <span
           className="mt-[2.5cqw] self-start rounded-[1cqw] bg-coral-ink px-[2cqw] py-[0.8cqw] font-bold tracking-[0.2em] uppercase"
@@ -57,7 +63,7 @@ export function IssueCover({
           Journal
         </span>
         <span className="mt-[4cqw] text-white/80" style={{ fontSize: "4cqw", lineHeight: 1.35 }}>
-          African, World Literature and English Language
+          {journalName}
         </span>
         <span className="mt-auto mb-[30cqw] font-semibold" style={{ fontSize: "8cqw", lineHeight: 1.1 }}>
           Volume {issue.volumeNumber}

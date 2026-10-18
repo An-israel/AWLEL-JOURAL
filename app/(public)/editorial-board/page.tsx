@@ -1,22 +1,13 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { getEditorialBoard, type BoardMember } from "@/lib/data/pages";
+import { initialsOf } from "@/lib/initials";
 
 export const metadata: Metadata = {
   title: "Editorial Board",
   description: "The editor, editorial team and editorial consultants of AWLEL.",
   alternates: { canonical: "/editorial-board" },
 };
-
-function initialsOf(name: string): string {
-  const words = name
-    .replace(/^(prof(essor)?|dr|mr|mrs|ms)\.?\s+/i, "")
-    .split(/\s+/)
-    .filter((w) => /^[A-Za-z]/.test(w));
-  const first = words[0]?.[0] ?? "";
-  const last = words.length > 1 ? words[words.length - 1][0] : "";
-  return (first + last).toUpperCase();
-}
 
 function Portrait({ member, size }: { member: BoardMember; size: "lg" | "md" }) {
   const box = size === "lg" ? "size-28 sm:size-32" : "size-14";

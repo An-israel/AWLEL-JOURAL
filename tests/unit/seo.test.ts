@@ -15,7 +15,7 @@ const meta: ScholarlyArticleMeta = {
     },
     { fullName: "Bola Adé", affiliation: null, orcid: null },
   ],
-  publishedAt: "2025-06-30T08:00:00Z",
+  published: { iso: "2025-06-30", precision: "day", year: 2025, month: 6 },
   year: 2025,
   journal: "African, World Literature and English Language",
   journalAbbrev: "AWLEL",
@@ -94,6 +94,22 @@ describe("Google Scholar tags", () => {
     expect(dc).toContainEqual(["DC.identifier", "https://doi.org/10.1234/awlel.25.1"]);
     expect(dc).toContainEqual(["DC.date", "2025-06-30"]);
   });
+
+  it("dates a back-catalogue article by its issue", () => {
+    const old = { ...meta, published: { iso: "2005-06", precision: "month", year: 2005, month: 6 } as const };
+    expect(scholarTags(old)).toContainEqual(["citation_publication_date", "2005"]);
+    expect(dublinCoreTags(old)).toContainEqual(["DC.date", "2005-06"]);
+  });
+
+  it("states rights only when a licence is set", () => {
+    expect(dublinCoreTags(meta).map(([n]) => n)).not.toContain("DC.rights");
+    expect(
+      dublinCoreTags({
+        ...meta,
+        licence: { name: "CC BY 4.0", url: "https://creativecommons.org/licenses/by/4.0/" },
+      }),
+    ).toContainEqual(["DC.rights", "CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)"]);
+  });
 });
 
 describe("JSON-LD", () => {
@@ -120,15 +136,18 @@ describe("JSON-LD", () => {
       abstract: "x",
       keywords: meta.keywords,
       authors: meta.authors,
-      datePublished: meta.publishedAt,
+      datePublished: meta.published.iso,
       dateModified: null,
       firstPage: 1,
       lastPage: 18,
       doi: meta.doi,
       pdfUrl: meta.pdfUrl,
+      license: "https://creativecommons.org/licenses/by/4.0/",
     });
     expect(ld).toMatchObject({
       "@type": "ScholarlyArticle",
+      datePublished: "2025-06-30",
+      license: "https://creativecommons.org/licenses/by/4.0/",
       pagination: "1-18",
       author: [
         { name: "Ngozi A. Okeke", sameAs: "https://orcid.org/0000-0002-1825-0097" },

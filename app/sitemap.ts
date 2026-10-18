@@ -7,6 +7,7 @@ import { siteUrl } from "@/lib/env.public";
 const STATIC_PAGES = [
   "/",
   "/issues",
+  "/categories",
   "/scope",
   "/submission-guidelines",
   "/editorial-board",

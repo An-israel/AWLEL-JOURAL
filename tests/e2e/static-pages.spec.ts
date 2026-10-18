@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { adminClient, resetRateLimits } from "./helpers";
 
 const pages = [
   { path: "/scope", heading: "Aims and Scope" },
@@ -59,5 +60,45 @@ test.describe("contact form", () => {
     await expect(page.getByRole("status").filter({ hasText: "Thank you" })).toContainText(
       "your message has been sent",
     );
+  });
+
+  test("keeps what was typed after an error, and really stores the corrected message", async ({ page }) => {
+    await resetRateLimits();
+    const subject = `E2E correction ${Date.now()}`;
+    await page.goto("/contact");
+    await page.waitForTimeout(3_200);
+
+    // First attempt: a bad email address and a message that is too short.
+    await page.getByLabel("Your name").fill("Correcting Reader");
+    await page.getByLabel("Email address").fill("not-an-email");
+    await page.getByLabel("Subject").fill(subject);
+    await page.getByLabel("Message").fill("Short");
+    await page.getByRole("button", { name: "Send message" }).click();
+    const form = page.locator("form").filter({ hasText: "Send us a message" });
+    await expect(form.getByRole("alert")).toContainText("Please correct the highlighted fields.");
+    await expect(page.getByLabel("Email address")).toHaveAttribute("aria-invalid", "true");
+    // The form must not lose what the reader typed.
+    await expect(page.getByLabel("Your name")).toHaveValue("Correcting Reader");
+    await expect(page.getByLabel("Subject")).toHaveValue(subject);
+
+    // Corrected attempt.
+    await page.getByLabel("Email address").fill("correcting.reader@example.com");
+    await page.getByLabel("Message").fill("This message was corrected after a validation error.");
+    await page.getByRole("button", { name: "Send message" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Thank you" })).toBeVisible();
+
+    // "Sent" must mean saved: the message is in the database.
+    const { data, error } = await adminClient()
+      .from("contact_messages")
+      .select("name, email, message")
+      .eq("subject", subject);
+    expect(error).toBeNull();
+    expect(data).toEqual([
+      {
+        name: "Correcting Reader",
+        email: "correcting.reader@example.com",
+        message: "This message was corrected after a validation error.",
+      },
+    ]);
   });
 });

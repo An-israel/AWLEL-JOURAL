@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Quote } from "lucide-react";
 import { notFound, permanentRedirect } from "next/navigation";
 import { Suspense } from "react";
 import { ArticleStats } from "@/components/catalog/article-stats";
@@ -34,6 +35,7 @@ import {
 import { getSiteSettings } from "@/lib/data/site-settings";
 import { siteUrl } from "@/lib/env.public";
 import { issueFileStem } from "@/lib/issue-label";
+import { articlePublicationDate, formatPublicationDate } from "@/lib/publication-date";
 import { richTextToPlain } from "@/lib/sanitize";
 import { scholarlyArticleLd } from "@/lib/seo/json-ld";
 import { dublinCoreTags, scholarTags, type ScholarlyArticleMeta } from "@/lib/seo/scholarly-meta";
@@ -64,15 +66,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title: article.title,
       description,
       url: path,
-      publishedTime: article.publishedAt ?? undefined,
+      publishedTime: articlePublicationDate(article.publishedAt, article.issue).iso,
       authors: article.authors.map((a) => a.fullName),
       tags: article.keywords,
     },
     twitter: { card: "summary_large_image", title: article.title, description },
   };
 }
-
-const dateFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
 function citationInput(
   article: ArticleDetail,
@@ -134,13 +134,7 @@ function RelatedList({
   );
 }
 
-async function ArticleContent({ params }: { params: Props["params"] }) {
-  const { slug } = await params;
-  const result = await getArticleBySlug(slug);
-  if (!result) notFound();
-  if ("redirectTo" in result) permanentRedirect(`/articles/${result.redirectTo}`);
-  const { article } = result;
-
+async function ArticleContent({ article }: { article: ArticleDetail }) {
   const [settings, issueArticles, categoryData] = await Promise.all([
     getSiteSettings(),
     getIssueArticles(article.issue.id),
@@ -156,12 +150,18 @@ async function ArticleContent({ params }: { params: Props["params"] }) {
   const fromIssue = issueArticles.filter((a) => a.id !== article.id).slice(0, 5);
   const inCategory = (categoryData?.articles ?? []).filter((a) => a.id !== article.id).slice(0, 5);
   const url = `${siteUrl}/articles/${article.slug}`;
-  const pdfUrl = article.hasPdf ? `${siteUrl}${articleDownloadPath(article.id, "pdf")}` : null;
+  // Opened inline, so Scholar gets the PDF itself and a reader following the
+  // link isn't counted as a download.
+  const pdfPath = `${articleDownloadPath(article.id, "pdf")}&inline=1`;
+  const pdfUrl = article.hasPdf ? `${siteUrl}${pdfPath}` : null;
   const abstract = richTextToPlain(article.abstract);
+  // Back-catalogue articles uploaded years later are dated by their issue (item 22).
+  const published = articlePublicationDate(article.publishedAt, article.issue);
+  const licence = settings.licence;
   const scholarly: ScholarlyArticleMeta = {
     title: article.title,
     authors: article.authors,
-    publishedAt: article.publishedAt,
+    published,
     year: article.issue.year,
     journal: settings.journalName,
     journalAbbrev: settings.shortName,
@@ -177,6 +177,7 @@ async function ArticleContent({ params }: { params: Props["params"] }) {
     url,
     pdfUrl,
     docxUrl: article.hasDocx ? `${siteUrl}${articleDownloadPath(article.id, "docx")}` : null,
+    licence,
   };
   const structured = scholarlyArticleLd(
     {
@@ -200,14 +201,29 @@ async function ArticleContent({ params }: { params: Props["params"] }) {
       abstract,
       keywords: article.keywords,
       authors: article.authors,
-      datePublished: article.publishedAt,
+      datePublished: published.iso,
       dateModified: article.updatedAt,
       firstPage: article.firstPage,
       lastPage: article.lastPage,
       doi: article.doi,
       pdfUrl,
+      license: licence ? (licence.url ?? licence.name) : null,
     },
   );
+  const downloadOptions = [
+    article.hasPdf && {
+      href: articleDownloadPath(article.id, "pdf"),
+      label: "Download PDF",
+      format: "PDF" as const,
+      sizeBytes: article.pdf?.sizeBytes,
+    },
+    article.hasDocx && {
+      href: articleDownloadPath(article.id, "docx"),
+      label: "Download Word",
+      format: "Word" as const,
+      sizeBytes: article.docx?.sizeBytes,
+    },
+  ];
   const affiliations = [
     ...new Set(article.authors.map((a) => a.affiliation).filter((a): a is string => Boolean(a))),
   ];
@@ -267,16 +283,12 @@ async function ArticleContent({ params }: { params: Props["params"] }) {
                   {pages ? `, ${pages}` : ""}
                 </dd>
               </div>
-              {article.publishedAt ? (
-                <div>
-                  <dt className="text-ink-muted">Published</dt>
-                  <dd className="font-medium">
-                    <time dateTime={article.publishedAt}>
-                      {dateFormat.format(new Date(article.publishedAt))}
-                    </time>
-                  </dd>
-                </div>
-              ) : null}
+              <div>
+                <dt className="text-ink-muted">Published</dt>
+                <dd className="font-medium">
+                  <time dateTime={published.iso}>{formatPublicationDate(published)}</time>
+                </dd>
+              </div>
               {article.doi ? (
                 <div>
                   <dt className="text-ink-muted">DOI</dt>
@@ -285,13 +297,36 @@ async function ArticleContent({ params }: { params: Props["params"] }) {
                   </dd>
                 </div>
               ) : null}
-              <div>
-                <dt className="text-ink-muted">Citation style</dt>
-                <dd className="font-medium">
-                  {article.citationStyle === "apa7" ? "APA 7th edition" : "MLA 8th edition"}
-                </dd>
-              </div>
+              {licence ? (
+                <div>
+                  <dt className="text-ink-muted">Licence</dt>
+                  <dd className="font-medium">
+                    {licence.url ? (
+                      <a href={licence.url} rel="license noopener" target="_blank">
+                        {licence.name}
+                        <span className="sr-only"> (opens in a new tab)</span>
+                      </a>
+                    ) : (
+                      licence.name
+                    )}
+                  </dd>
+                </div>
+              ) : null}
             </dl>
+
+            {/* Phones: the download and cite tools sit at the foot of the
+                page, so offer them here as well (item 23). Desktop keeps
+                the sticky sidebar only. No ids here, so none are repeated. */}
+            <div className="mt-8 flex flex-wrap items-center gap-2 lg:hidden">
+              <DownloadLinks options={downloadOptions} />
+              <a
+                href="#cite"
+                className="inline-flex items-center gap-1.5 rounded-md border border-line bg-white px-2.5 py-1.5 text-xs font-semibold text-navy no-underline transition-colors hover:border-navy hover:bg-navy hover:text-white"
+              >
+                <Quote aria-hidden className="size-3.5" />
+                Cite
+              </a>
+            </div>
           </div>
         </div>
       </header>
@@ -322,9 +357,7 @@ async function ArticleContent({ params }: { params: Props["params"] }) {
             ) : null}
           </section>
 
-          {article.hasPdf ? (
-            <PdfPreview src={`${articleDownloadPath(article.id, "pdf")}&inline=1`} title={article.title} />
-          ) : null}
+          {article.hasPdf ? <PdfPreview src={pdfPath} title={article.title} /> : null}
 
           <div className="grid gap-12 md:grid-cols-2">
             <RelatedList
@@ -352,23 +385,7 @@ async function ArticleContent({ params }: { params: Props["params"] }) {
             </h2>
             <div className="mt-4">
               {article.hasPdf || article.hasDocx ? (
-                <DownloadLinks
-                  variant="large"
-                  options={[
-                    article.hasPdf && {
-                      href: articleDownloadPath(article.id, "pdf"),
-                      label: "Download PDF",
-                      format: "PDF",
-                      sizeBytes: article.pdf?.sizeBytes,
-                    },
-                    article.hasDocx && {
-                      href: articleDownloadPath(article.id, "docx"),
-                      label: "Download Word",
-                      format: "Word",
-                      sizeBytes: article.docx?.sizeBytes,
-                    },
-                  ]}
-                />
+                <DownloadLinks variant="large" options={downloadOptions} />
               ) : (
                 <p className="text-sm text-ink-muted">
                   The full text of this article will be available to download soon.
@@ -381,13 +398,16 @@ async function ArticleContent({ params }: { params: Props["params"] }) {
               downloads={article.downloadCount}
             />
           </section>
-          <CitePanel
-            apa={formatApa(input)}
-            mla={formatMla(input)}
-            bibtex={formatBibtex(input)}
-            ris={formatRis(input)}
-            risFileName={risFileName}
-          />
+          <div id="cite" className="scroll-mt-36">
+            <CitePanel
+              apa={formatApa(input)}
+              mla={formatMla(input)}
+              bibtex={formatBibtex(input)}
+              ris={formatRis(input)}
+              risFileName={risFileName}
+              defaultStyle={article.citationStyle === "mla8" ? "mla" : "apa"}
+            />
+          </div>
           <ShareLinks url={url} title={article.title} />
         </aside>
       </div>
@@ -410,10 +430,18 @@ function ArticleSkeleton() {
   );
 }
 
-export default function ArticlePage({ params }: Props) {
+export default async function ArticlePage({ params }: Props) {
+  // Settled before anything streams, so a missing article gets a real 404
+  // and a renamed one a real permanent redirect, not a 200 page (item 20).
+  // The lookup is cached, so known articles stay fast.
+  const { slug } = await params;
+  const result = await getArticleBySlug(slug);
+  if (!result) notFound();
+  if ("redirectTo" in result) permanentRedirect(`/articles/${result.redirectTo}`);
+
   return (
     <Suspense fallback={<ArticleSkeleton />}>
-      <ArticleContent params={params} />
+      <ArticleContent article={result.article} />
     </Suspense>
   );
 }
