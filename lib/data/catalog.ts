@@ -387,23 +387,76 @@ export async function getCategoriesWithCounts(): Promise<CategoryWithCount[]> {
   }));
 }
 
-export async function getCategoryArticles(slug: string): Promise<{
-  category: CategoryWithCount;
-  articles: ArticleSummary[];
-} | null> {
+export interface CategoryInfo {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  /** Archived subjects keep their page (articles still link to it) but leave the lists (item 75). */
+  isArchived: boolean;
+}
+
+/** One category by slug, archived or not. */
+export async function getCategory(slug: string): Promise<CategoryInfo | null> {
+  "use cache";
+  cacheTag(TAGS.categories);
+  const { data, error } = await createSupabasePublicClient()
+    .from("categories")
+    .select("id, name, slug, description, is_archived")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (error) return degrade("category", error, null);
+  cacheLife("days");
+  return data
+    ? {
+        id: data.id,
+        name: data.name,
+        slug: data.slug,
+        description: data.description,
+        isArchived: data.is_archived,
+      }
+    : null;
+}
+
+export const CATEGORY_PAGE_SIZE = 20;
+export type CategorySort = "newest" | "read";
+
+/** One page of a category's articles, newest or most read first, with the total (item 30). */
+export async function getCategoryArticles(
+  slug: string,
+  page = 1,
+  sort: CategorySort = "newest",
+  pageSize = CATEGORY_PAGE_SIZE,
+): Promise<{ category: CategoryInfo; articles: ArticleSummary[]; total: number } | null> {
   "use cache";
   cacheTag(TAGS.categories, TAGS.articles);
-  const category = (await getCategoriesWithCounts()).find((c) => c.slug === slug);
+  const category = await getCategory(slug);
   if (!category) return null;
-  const { data, error } = await createSupabasePublicClient()
+  let query = createSupabasePublicClient()
     .from("articles")
-    .select(ARTICLE_COLUMNS)
-    .eq("category_id", category.id)
+    .select(ARTICLE_COLUMNS, { count: "exact" })
+    .eq("category_id", category.id);
+  if (sort === "read") query = query.order("view_count", { ascending: false });
+  const from = (page - 1) * pageSize;
+  const { data, error, count } = await query
     .order("published_at", { ascending: false })
-    .order("sort_order");
+    .order("sort_order")
+    .order("id")
+    .range(from, from + pageSize - 1);
+  if (error?.code === "PGRST103") {
+    // A page past the end: no rows, but the page still needs the total.
+    const { count: total, error: countError } = await createSupabasePublicClient()
+      .from("articles")
+      .select("id", { count: "exact", head: true })
+      .eq("category_id", category.id);
+    if (countError) return degrade("category articles", countError, null);
+    cacheLife("hours");
+    return { category, articles: [], total: total ?? 0 };
+  }
   if (error) return degrade("category articles", error, null);
-  cacheLife("days");
-  return { category, articles: await toSummaries((data ?? []) as ArticleRow[]) };
+  if (sort === "read") cacheLife("hours");
+  else cacheLife("days");
+  return { category, articles: await toSummaries((data ?? []) as ArticleRow[]), total: count ?? 0 };
 }
 
 /** Published article count per issue id (one query). */

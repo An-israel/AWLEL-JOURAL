@@ -56,8 +56,26 @@ test("category page lists its articles and sorts by most read", async ({ page })
   await page.goto("/categories/african-literature");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("African Literature");
   await expect(page.getByRole("article")).toHaveCount(1);
-  await page.getByRole("button", { name: "Most read" }).click();
-  await expect(page.getByRole("button", { name: "Most read" })).toHaveAttribute("aria-pressed", "true");
+  const sort = page.getByRole("navigation", { name: "Sort articles" });
+  await sort.getByRole("link", { name: "Most read" }).click();
+  await expect(page).toHaveURL(/\/categories\/african-literature\?sort=read$/);
+  await expect(sort.getByRole("link", { name: "Most read" })).toHaveAttribute("aria-current", "true");
+
+  // The breadcrumb leads to the list of every subject.
+  await page
+    .getByRole("navigation", { name: "Breadcrumb" })
+    .getByRole("link", { name: "Categories" })
+    .click();
+  await expect(page).toHaveURL(/\/categories$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Subject areas");
+  await expect(page.getByRole("region", { name: "Subject areas" }).getByRole("link")).toHaveCount(10);
+});
+
+test("a page past the end of a category says how many pages there are", async ({ page }) => {
+  const response = await page.goto("/categories/african-literature?page=5");
+  expect(response?.status()).toBe(200);
+  await expect(page.getByText("There is only 1 page of results")).toBeVisible();
+  expect((await page.goto("/categories/no-such-subject"))?.status()).toBe(404);
 });
 
 test("search finds articles by keyword and author, with highlights and filters", async ({ page }) => {

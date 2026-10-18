@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { categoryTint } from "@/components/catalog/category-tag";
+import { SubjectGrid } from "@/components/catalog/subject-grid";
 import { AsideCard, StaticPage } from "@/components/pages/static-page";
 import { getCategoriesWithCounts } from "@/lib/data/catalog";
 import { staticPageMetadata } from "@/lib/data/page-metadata";
@@ -20,26 +20,7 @@ export default async function ScopePage() {
           <h2 id="subject-areas" className="border-t border-line pt-5 text-2xl">
             Subject areas
           </h2>
-          <ul className="mt-6 grid gap-3 sm:grid-cols-2">
-            {categories.map((c) => (
-              <li key={c.id}>
-                <Link
-                  href={`/categories/${c.slug}`}
-                  className="group flex h-full flex-col rounded-lg border border-line bg-white p-4 no-underline transition-colors hover:border-navy"
-                >
-                  <span className="flex items-center justify-between gap-3">
-                    <span className="font-semibold text-ink group-hover:text-navy">{c.name}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${categoryTint(c.slug)}`}>
-                      {c.articleCount}
-                    </span>
-                  </span>
-                  {c.description ? (
-                    <span className="mt-1.5 text-sm text-ink-muted">{c.description}</span>
-                  ) : null}
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <SubjectGrid categories={categories} />
         </section>
       }
       aside={
