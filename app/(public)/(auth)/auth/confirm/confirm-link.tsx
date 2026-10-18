@@ -31,34 +31,30 @@ export function ConfirmLink() {
     const params = new URLSearchParams(window.location.hash.slice(1));
     // Tokens must not stay in the address bar or history.
     window.history.replaceState(null, "", window.location.pathname + window.location.search);
-    if (params.get("error") || params.get("error_code") || params.get("error_description")) {
-      setError(describe(params));
-      return;
-    }
-    const accessToken = params.get("access_token");
-    const refreshToken = params.get("refresh_token");
-    if (!accessToken || !refreshToken) {
-      setError("This link is incomplete. Please open it again from the email, or request a new one.");
-      return;
-    }
-    // Our own client: the shared one would try (and fail) to read the
-    // fragment itself, because it expects PKCE links.
-    const supabase = createBrowserClient(
-      publicEnv.NEXT_PUBLIC_SUPABASE_URL,
-      publicEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      { isSingleton: false, auth: { detectSessionInUrl: false, autoRefreshToken: false } },
-    );
-    void (async () => {
+    void (async (): Promise<string | null> => {
+      if (params.get("error") || params.get("error_code") || params.get("error_description")) {
+        return describe(params);
+      }
+      const accessToken = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+      if (!accessToken || !refreshToken) {
+        return "This link is incomplete. Please open it again from the email, or request a new one.";
+      }
+      // Our own client: the shared one would try (and fail) to read the
+      // fragment itself, because it expects PKCE links.
+      const supabase = createBrowserClient(
+        publicEnv.NEXT_PUBLIC_SUPABASE_URL,
+        publicEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+        { isSingleton: false, auth: { detectSessionInUrl: false, autoRefreshToken: false } },
+      );
       const { error: sessionError } = await supabase.auth.setSession({
         access_token: accessToken,
         refresh_token: refreshToken,
       });
-      if (sessionError) {
-        setError("This link has expired or has already been used. Please request a new one.");
-        return;
-      }
+      if (sessionError) return "This link has expired or has already been used. Please request a new one.";
       window.location.replace(await destinationAfterLink(params.get("type"), next));
-    })();
+      return null;
+    })().then((message) => message && setError(message));
   }, [next]);
 
   if (!error) {

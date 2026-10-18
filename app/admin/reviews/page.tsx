@@ -39,6 +39,8 @@ async function Content() {
             </Link>
             <p className="text-xs text-ink-muted">
               {r.category_name ?? "No category"} · invited {date.format(new Date(r.assigned_at))}
+              {r.round > 1 ? ` · round ${r.round} (revised manuscript)` : ""}
+              {r.assignment_status === "pending" && !r.response ? " · please accept or decline" : ""}
             </p>
           </div>
           {r.assignment_status === "submitted" ? (
