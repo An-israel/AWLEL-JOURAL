@@ -1,7 +1,7 @@
 "use client";
 
 import { UserPlus } from "lucide-react";
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTrigger } from "@/components/ui/dialog";
 import { FieldError, Input, Label, NativeSelect } from "@/components/ui/input";
@@ -55,6 +55,12 @@ function InviteForm({ onDone }: { onDone: () => void }) {
   // from the server with the error instead of being lost.
   const values = state.values;
   const [role, setRole] = useState<UserRole>(values?.role ?? "reviewer");
+  // The reset puts the select back on its first option while `role` keeps the
+  // choice; show the choice again once the reset has happened.
+  const roleSelect = useRef<HTMLSelectElement>(null);
+  useEffect(() => {
+    if (roleSelect.current) roleSelect.current.value = role;
+  }, [state, role]);
 
   return (
     <form action={action} className="space-y-4" noValidate>
@@ -93,6 +99,7 @@ function InviteForm({ onDone }: { onDone: () => void }) {
         <NativeSelect
           id="invite-role"
           name="role"
+          ref={roleSelect}
           value={role}
           onChange={(e) => setRole(e.target.value as UserRole)}
           className="mt-1.5"

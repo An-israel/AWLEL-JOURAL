@@ -29,6 +29,11 @@ async function load(params: Props["params"]) {
   return v && i ? getIssue(v, i) : null;
 }
 
+// The first visit to an address that wasn't prerendered waits for the real
+// page instead of a shared fallback, so a missing item gets a true 404
+// status rather than a 200 (item 20).
+export const ensureStatic = "navigation";
+
 export async function generateStaticParams() {
   const issues = await getPublishedIssues();
   const params = issues.map((i) => ({ volume: String(i.volumeNumber), issue: String(i.issueNumber) }));

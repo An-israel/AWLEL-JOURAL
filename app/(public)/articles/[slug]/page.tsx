@@ -43,6 +43,11 @@ import { articleDownloadPath } from "@/lib/storage";
 
 type Props = PageProps<"/articles/[slug]">;
 
+// The first visit to an address that wasn't prerendered waits for the real
+// page instead of a shared fallback, so a missing item gets a true 404
+// status rather than a 200 (item 20).
+export const ensureStatic = "navigation";
+
 export async function generateStaticParams() {
   const slugs = await getPublishedArticleSlugs();
   return slugs.length > 0 ? slugs.map((slug) => ({ slug })) : [{ slug: "__none__" }];

@@ -102,11 +102,13 @@ test("a link with an error in its fragment shows a clear message", async ({ page
     "/auth/callback?next=%2Freset-password#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired",
   );
   await expect(page).toHaveURL(/\/auth\/confirm/);
-  await expect(page.getByRole("alert")).toContainText("This link has expired or has already been used.");
+  await expect(page.getByRole("main").getByRole("alert")).toContainText(
+    "This link has expired or has already been used.",
+  );
 });
 
 test("a link without code or token goes to /auth/confirm", async ({ page }) => {
   await page.goto("/auth/callback?next=%2Faccount");
   await expect(page).toHaveURL(/\/auth\/confirm\?next=%2Faccount$/);
-  await expect(page.getByRole("alert")).toContainText("This link is incomplete.");
+  await expect(page.getByRole("main").getByRole("alert")).toContainText("This link is incomplete.");
 });

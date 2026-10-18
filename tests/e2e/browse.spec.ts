@@ -75,7 +75,12 @@ test("a page past the end of a category says how many pages there are", async ({
   const response = await page.goto("/categories/african-literature?page=5");
   expect(response?.status()).toBe(200);
   await expect(page.getByText("There is only 1 page of results")).toBeVisible();
-  expect((await page.goto("/categories/no-such-subject"))?.status()).toBe(404);
+  // Subject pages read ?page= and ?sort=, so an unknown subject streams in
+  // after the shell: it shows the not-found page and is kept out of search
+  // engines with noindex rather than a 404 status.
+  await page.goto(`/categories/no-such-subject-${Date.now()}`);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("This page could not be found");
+  await expect(page.locator('meta[name="robots"][content*="noindex"]').first()).toBeAttached();
 });
 
 test("search finds articles by keyword and author, with highlights and filters", async ({ page }) => {
