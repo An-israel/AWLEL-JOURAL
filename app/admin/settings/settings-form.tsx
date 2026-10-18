@@ -5,8 +5,10 @@ import { ConflictBanner } from "@/components/admin/conflict-banner";
 import { FileSlot } from "@/components/admin/file-slot";
 import { useUnsavedChanges } from "@/components/admin/use-unsaved-changes";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/dialog";
 import { FieldError, Input, Label, Textarea } from "@/components/ui/input";
 import { toast } from "@/components/ui/toaster";
+import { featureEffect, featureName } from "@/lib/admin/feature-names";
 import { SITE_ENTITY_IDS } from "@/lib/admin/file-slots";
 import type { AttachedFile } from "@/lib/admin/uploads";
 import { saveSettings, setFeatureFlag } from "./actions";
@@ -32,21 +34,15 @@ export interface Flag {
   description: string;
 }
 
-export function SettingsForm({
-  settings,
-  flags,
-  schemaVersion,
-}: {
-  settings: SettingsData;
-  flags: Flag[];
-  schemaVersion: string | null;
-}) {
+export function SettingsForm({ settings, flags }: { settings: SettingsData; flags: Flag[] }) {
   const [form, setForm] = useState(settings);
   const [version, setVersion] = useState(settings.version);
   const [dirty, setDirty] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [conflict, setConflict] = useState(false);
   const [flagState, setFlagState] = useState(flags);
+  // Feature switches change the public site at once, so ask first (item 87).
+  const [switching, setSwitching] = useState<Flag | null>(null);
   const [pending, start] = useTransition();
   useUnsavedChanges(dirty);
 
@@ -180,9 +176,7 @@ export function SettingsForm({
           {flagState.map((f) => (
             <li key={f.key} className="flex items-center justify-between gap-4 px-4 py-3">
               <label htmlFor={`flag-${f.key}`} className="min-w-0 text-sm">
-                <span className="block font-medium text-ink">
-                  {f.key.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())}
-                </span>
+                <span className="block font-medium text-ink">{featureName(f.key)}</span>
                 <span className="text-ink-muted">{f.description}</span>
               </label>
               <button
@@ -191,16 +185,7 @@ export function SettingsForm({
                 role="switch"
                 aria-checked={f.enabled}
                 disabled={pending}
-                onClick={() =>
-                  start(async () => {
-                    const r = await setFeatureFlag({ key: f.key, enabled: !f.enabled });
-                    if (!r.ok) return void toast.error(r.message);
-                    setFlagState((list) =>
-                      list.map((x) => (x.key === f.key ? { ...x, enabled: !x.enabled } : x)),
-                    );
-                    toast.success(r.message ?? "Saved");
-                  })
-                }
+                onClick={() => setSwitching(f)}
                 className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${f.enabled ? "bg-navy" : "bg-line"}`}
               >
                 <span
@@ -212,7 +197,29 @@ export function SettingsForm({
         </ul>
       </section>
 
-      <p className="text-xs text-ink-muted">Database schema version: {schemaVersion ?? "unknown"}</p>
+      <ConfirmDialog
+        open={switching !== null}
+        onOpenChange={(o) => !o && setSwitching(null)}
+        title={switching ? `Turn ${switching.enabled ? "off" : "on"} “${featureName(switching.key)}”?` : ""}
+        description={
+          switching
+            ? `${featureEffect(switching.key, !switching.enabled, switching.description)} This changes the public site straight away.`
+            : ""
+        }
+        confirmLabel={switching?.enabled ? "Turn off" : "Turn on"}
+        destructive={switching?.enabled}
+        onConfirm={() => {
+          const f = switching;
+          setSwitching(null);
+          if (!f) return;
+          start(async () => {
+            const r = await setFeatureFlag({ key: f.key, enabled: !f.enabled });
+            if (!r.ok) return void toast.error(r.message);
+            setFlagState((list) => list.map((x) => (x.key === f.key ? { ...x, enabled: !x.enabled } : x)));
+            toast.success(r.message ?? "Saved");
+          });
+        }}
+      />
     </div>
   );
 }

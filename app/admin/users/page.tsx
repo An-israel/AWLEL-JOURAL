@@ -9,7 +9,7 @@ import { requireRole } from "@/lib/auth";
 import { ROLE_LABELS, ROLES } from "@/lib/roles";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { InviteDialog } from "./invite-dialog";
-import { UsersTable } from "./users-table";
+import { RoleLegend, UsersTable } from "./users-table";
 
 export const metadata: Metadata = { title: "Users and Roles" };
 
@@ -140,6 +140,7 @@ export default function UsersPage({ searchParams }: Props) {
         description="Invite editors, reviewers and other Super Admins, change roles and deactivate accounts. There must always be at least one active Super Admin."
         actions={<InviteDialog />}
       />
+      <RoleLegend />
       <Suspense fallback={<div className="mt-8 h-72 animate-pulse rounded-lg bg-line" aria-busy="true" />}>
         <UsersContent searchParams={searchParams} />
       </Suspense>

@@ -33,19 +33,33 @@ function friendly(error: { code?: string; message: string }): string {
 
 const inviteSchema = z.object({
   email: z.email("Enter a valid email address."),
-  fullName: z.string().trim().min(2, "Enter the person's name.").max(200),
-  role: z.enum(ROLES),
+  fullName: z
+    .string("Enter the person's name.")
+    .trim()
+    .min(2, "Enter the person's name.")
+    .max(200, "Keep the name under 200 characters."),
+  role: z.enum(ROLES, "Choose a role."),
 });
 
 export interface InviteState {
   status: "idle" | "success" | "error";
   message?: string;
   fieldErrors?: Record<string, string>;
+  /** What was submitted, shown again after an error so nothing has to be retyped (item 85). */
+  values?: { fullName: string; email: string; role: (typeof ROLES)[number] };
 }
 
 export async function inviteUser(_prev: InviteState, fd: FormData): Promise<InviteState> {
   const actor = await userWithRole(SUPER);
   if (!actor) return { status: "error", message: "Only a Super Admin can invite users." };
+  const submittedRole = String(fd.get("role") ?? "");
+  const values = {
+    fullName: String(fd.get("fullName") ?? "").slice(0, 200),
+    email: String(fd.get("email") ?? "").slice(0, 320),
+    role: (ROLES as readonly string[]).includes(submittedRole)
+      ? (submittedRole as (typeof ROLES)[number])
+      : "reviewer",
+  };
 
   const parsed = inviteSchema.safeParse({
     email: fd.get("email"),
@@ -55,7 +69,7 @@ export async function inviteUser(_prev: InviteState, fd: FormData): Promise<Invi
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};
     for (const issue of parsed.error.issues) fieldErrors[String(issue.path[0])] ??= issue.message;
-    return { status: "error", fieldErrors };
+    return { status: "error", fieldErrors, values };
   }
   const { email, fullName, role } = parsed.data;
 
@@ -69,6 +83,7 @@ export async function inviteUser(_prev: InviteState, fd: FormData): Promise<Invi
     if (!exists) logger.error({ code: error?.code }, "invite failed");
     return {
       status: "error",
+      values,
       message: exists
         ? "Someone with this email already has an account. Change their role in the table instead."
         : "The invitation could not be sent. Please try again.",

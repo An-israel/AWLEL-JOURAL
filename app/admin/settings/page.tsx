@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "Settings" };
 async function Content() {
   await requireRole(["super_admin"], "/admin/settings");
   const supabase = await createSupabaseServerClient();
-  const [{ data: s }, { data: flags }, { data: schemaVersion }] = await Promise.all([
+  const [{ data: s }, { data: flags }] = await Promise.all([
     supabase
       .from("site_settings")
       .select(
@@ -22,13 +22,11 @@ async function Content() {
       .eq("id", 1)
       .single(),
     supabase.from("feature_flags").select("key, enabled, description").order("key"),
-    supabase.rpc("schema_version"),
   ]);
   if (!s) throw new Error("Site settings are missing. Run the seed.");
   const social = (s.social_links ?? {}) as Record<string, string>;
   return (
     <SettingsForm
-      schemaVersion={schemaVersion ?? null}
       flags={flags ?? []}
       settings={{
         version: s.version,

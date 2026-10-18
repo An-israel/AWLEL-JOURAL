@@ -3,6 +3,7 @@
 import { updateTag } from "next/cache";
 import { z } from "zod";
 import { userWithRole } from "@/lib/auth";
+import { featureName } from "@/lib/admin/feature-names";
 import { fromDbError, forbiddenResult, invalid, type ActionResult } from "@/lib/admin/result";
 import { FLAGS_TAG } from "@/lib/data/feature-flags";
 import { TAGS } from "@/lib/data/tags";
@@ -13,17 +14,38 @@ const url = z.union([z.literal(""), z.url("Enter a full address starting with ht
 
 const settingsSchema = z.object({
   expectedVersion: z.number().int(),
-  journalName: z.string().trim().min(3).max(200),
-  shortName: z.string().trim().min(2).max(20),
-  subtitle: z.string().trim().min(3).max(300),
+  // Plain-English messages for every field (item 86).
+  journalName: z
+    .string("Enter the journal's name.")
+    .trim()
+    .min(3, "Enter the journal's name (at least 3 characters).")
+    .max(200, "Keep the journal's name under 200 characters."),
+  shortName: z
+    .string("Enter a short name.")
+    .trim()
+    .min(2, "Enter a short name of at least 2 characters, e.g. AWLEL.")
+    .max(20, "Keep the short name to 20 characters or fewer."),
+  subtitle: z
+    .string("Enter a subtitle.")
+    .trim()
+    .min(3, "Enter a subtitle (at least 3 characters).")
+    .max(300, "Keep the subtitle under 300 characters."),
   issn: z
-    .string()
+    .string("Enter the ISSN.")
     .trim()
     .regex(/^\d{4}-\d{3}[\dX]$/, "ISSN format is 1234-567X."),
-  publisher: z.string().trim().min(3).max(300),
+  publisher: z
+    .string("Enter the publisher.")
+    .trim()
+    .min(3, "Enter the publisher's name (at least 3 characters).")
+    .max(300, "Keep the publisher's name under 300 characters."),
   contactEmail: z.email("Enter a valid email address."),
-  postalAddress: z.string().trim().max(500).optional(),
-  publicationFrequency: z.string().trim().max(200).optional(),
+  postalAddress: z.string().trim().max(500, "Keep the postal address under 500 characters.").optional(),
+  publicationFrequency: z
+    .string()
+    .trim()
+    .max(200, "Keep the publication frequency under 200 characters.")
+    .optional(),
   social: z.object({ x: url, facebook: url, linkedin: url, website: url }),
 });
 
@@ -81,5 +103,8 @@ export async function setFeatureFlag(input: { key: string; enabled: boolean }): 
   if (error) return fromDbError(error, "setting");
   if (!data) return { ok: false, message: "Unknown feature." };
   updateTag(FLAGS_TAG);
-  return { ok: true, message: `${parsed.data.enabled ? "Turned on" : "Turned off"}.` };
+  return {
+    ok: true,
+    message: `${featureName(parsed.data.key)} turned ${parsed.data.enabled ? "on" : "off"}.`,
+  };
 }
