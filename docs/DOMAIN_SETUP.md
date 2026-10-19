@@ -63,17 +63,12 @@ your domain, for example `no-reply@awlel-journal.org`:
    - **Set both.** The site sends email only when both are set, and `EMAIL_FROM` must use the domain you just
      verified. Until then, emails wait in a queue and nothing is lost: they go out within about 30 minutes of
      the redeploy. Admin → Operations → **Configuration** shows both as *Set* when it is right.
-4. **Required: Supabase's own emails** (sign-up confirmation, password reset, invitations). Supabase's built-in
-   email sends **only to members of your Supabase organisation** (Supabase → Organization → Team) and only about
-   2 an hour, so without this step authors never receive their sign-up confirmation. Supabase →
-   **Authentication** → **Emails** → **SMTP Settings** → enable custom SMTP with host `smtp.resend.com`, port
-   `465`, user `resend`, password = a Resend API key, sender email `no-reply@awlel-journal.org`, sender name
-   `AWLEL Journal` → **Save**.
-5. Then Supabase → **Authentication** → **Rate Limits** → *Rate limit for sending emails*: raise it to about
-   **100** an hour → **Save** (the setting can only be changed once custom SMTP is on).
-6. Test with an address outside your Supabase team: sign up on the site and check the confirmation email arrives.
-   If the link in it fails, check the email templates are the ones in `docs/LAUNCH_GUIDE.md`, step 6.
-7. After about four weeks without delivery problems, change the DMARC record's `p=none` to `p=quarantine`.
+4. **No Supabase SMTP needed.** Once both are set, the site sends the account emails too (sign-up
+   confirmation, password reset, invitations), in the journal's design. Supabase's SMTP settings, templates
+   and email limits can stay as they are.
+5. Test with an address outside your Supabase team: sign up on the site and check the confirmation email
+   arrives, and that its link works (ideally opened on a phone).
+6. After about four weeks without delivery problems, change the DMARC record's `p=none` to `p=quarantine`.
 
 **If the journal later moves to `awlel.unn.edu.ng`:** the same records apply, but UNN ICT creates them in the
 `unn.edu.ng` DNS (a CNAME `awlel` → the Vercel value, and the Resend records under `awlel`).

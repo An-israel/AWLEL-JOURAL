@@ -89,14 +89,13 @@ command-line alternative.
    project name, so add a specific preview's exact branch address only while you need sign-in on it.
 5. **Auth → Providers:** keep _Email_ enabled with **Confirm email** switched on (local development has it off).
    Optionally enable _Google_, then turn on the `google_sign_in` feature flag.
-   **Auth → Emails → Templates:** replace the templates with the ones in `docs/LAUNCH_GUIDE.md`, step 6. They
-   link to `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=…&next=…`, which works on any device.
-   The default links don't: invitations (sent with the service role, so without PKCE) put the session in the
-   URL fragment, which the server-side callback never sees, and PKCE confirmation and reset links only work in
-   the browser that asked for them.
-6. **Auth → SMTP (required):** use Resend's SMTP credentials. Supabase's built-in email sends only to members
-   of the Supabase organisation, about 2 an hour, so without this nobody else gets a sign-up confirmation.
-   Then raise **Auth → Rate Limits** → emails to about 100 an hour.
+   **Auth → Emails → Templates:** optional. The site sends account emails itself once Resend is set up; before
+   that, the files in `supabase/templates` give Supabase's own emails the same design and token_hash links
+   (`{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=…&next=…`), which work on any device.
+6. **Auth emails:** nothing to set in Supabase. With `RESEND_API_KEY` and `EMAIL_FROM` set, the site sends
+   sign-up confirmations, password resets and invitations itself (`lib/server/auth-email.ts`): Supabase only
+   generates the one-time links, so its built-in email (team members only, about 2 an hour) is never used.
+   `supabase/templates` holds the same design for Supabase's own emails, used locally and before Resend is set.
 7. Storage buckets (`issue-covers`, `site-assets`, `published-files`, `submissions`) and their policies are
    created by the migrations; there is nothing to click.
 
@@ -151,8 +150,7 @@ Step by step, for a domain bought from any registrar (website records and the em
 create the A and CNAME records Vercel shows at your registrar, then set `NEXT_PUBLIC_SITE_URL` and the GitHub
 `SITE_URL` secret to the exact primary address (not the one that redirects to it: the workflows fail on a
 redirect), update Supabase → Auth → URL configuration, and redeploy. For email, add the domain in Resend and
-create its SPF, DKIM and DMARC records, then set `RESEND_API_KEY` and `EMAIL_FROM`, and switch Supabase to
-custom SMTP.
+create its SPF, DKIM and DMARC records, then set `RESEND_API_KEY` and `EMAIL_FROM`. No Supabase SMTP is needed.
 
 ## Editor's guide: publishing an issue
 

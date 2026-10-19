@@ -5,6 +5,12 @@ import { redirect } from "next/navigation";
 import { getFeatureFlags } from "@/lib/data/feature-flags";
 import { siteUrl } from "@/lib/env.public";
 import { landingPathFor, safeNextPath, type UserRole } from "@/lib/roles";
+import {
+  accountEmailsBySite,
+  resendConfirmationEmail,
+  sendPasswordResetEmail,
+  signUpWithEmail,
+} from "@/lib/server/auth-email";
 import { logger } from "@/lib/server/logger";
 import {
   blockedMessage,
@@ -111,9 +117,36 @@ export async function signUp(_prev: FormState, fd: FormData): Promise<FormState>
   const blocked = await limited(RATE_LIMITS.signupPerIp, RATE_LIMITS.signupPerEmail, parsed.data.email);
   if (blocked) return { status: "error", message: blocked, values };
 
-  const supabase = await createSupabaseServerClient();
+  const checkEmail = {
+    status: "success" as const,
+    message: `We've sent a confirmation link to ${parsed.data.email}. Open it to activate your account.`,
+    values: { email: parsed.data.email },
+    resend: true,
+  };
+
   // Self-registration always creates an author; the role is fixed in the
   // database trigger and cannot be chosen here.
+  if (accountEmailsBySite()) {
+    // The site sends the email itself, in the journal's design. The answer
+    // doesn't reveal whether the address was already registered.
+    const result = await signUpWithEmail({
+      email: parsed.data.email,
+      password: parsed.data.password,
+      fullName: parsed.data.fullName,
+      affiliation: parsed.data.affiliation ?? "",
+    });
+    if (!result.ok) {
+      const message =
+        result.reason === "weak_password"
+          ? "Please choose a stronger password."
+          : "We couldn't create your account. Please try again.";
+      return { status: "error", message, values };
+    }
+    return checkEmail;
+  }
+
+  // Until Resend is set up, Supabase sends the email (to its own team only).
+  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
@@ -137,12 +170,7 @@ export async function signUp(_prev: FormState, fd: FormData): Promise<FormState>
 
   // With email confirmation on (production) there is no session yet.
   if (data.session) redirect(safeNextPath(str(fd, "next")) ?? "/account");
-  return {
-    status: "success",
-    message: `We've sent a confirmation link to ${parsed.data.email}. Open it to activate your account.`,
-    values: { email: parsed.data.email },
-    resend: true,
-  };
+  return checkEmail;
 }
 
 /**
@@ -156,13 +184,17 @@ export async function resendConfirmation(_prev: FormState, fd: FormData): Promis
   if (blocked)
     return { status: "error", message: blocked, values: { email: parsed.data.email }, resend: true };
 
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.resend({
-    type: "signup",
-    email: parsed.data.email,
-    options: { emailRedirectTo: callbackUrl("/account") },
-  });
-  if (error) logger.warn({ code: error.code }, "confirmation resend failed");
+  if (accountEmailsBySite()) {
+    await resendConfirmationEmail(parsed.data.email);
+  } else {
+    const supabase = await createSupabaseServerClient();
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: parsed.data.email,
+      options: { emailRedirectTo: callbackUrl("/account") },
+    });
+    if (error) logger.warn({ code: error.code }, "confirmation resend failed");
+  }
   return {
     status: "success",
     message:
@@ -179,11 +211,15 @@ export async function requestPasswordReset(_prev: FormState, fd: FormData): Prom
   const blocked = await limited(RATE_LIMITS.passwordReset, RATE_LIMITS.passwordReset, parsed.data.email);
   if (blocked) return { status: "error", message: blocked };
 
-  const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-    redirectTo: callbackUrl("/reset-password"),
-  });
-  if (error) logger.warn({ code: error.code }, "password reset request failed");
+  if (accountEmailsBySite()) {
+    await sendPasswordResetEmail(parsed.data.email);
+  } else {
+    const supabase = await createSupabaseServerClient();
+    const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+      redirectTo: callbackUrl("/reset-password"),
+    });
+    if (error) logger.warn({ code: error.code }, "password reset request failed");
+  }
   // Same answer whether or not the account exists, so emails can't be enumerated.
   return {
     status: "success",

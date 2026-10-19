@@ -30,6 +30,8 @@ const optional = {
   // No default: email is only sent once RESEND_API_KEY and EMAIL_FROM are both
   // set (lib/server/email.ts); a made-up sender would be refused by Resend.
   EMAIL_FROM: sender.optional(),
+  // Only for tests: a stand-in for Resend's API. Never set in production.
+  RESEND_API_URL: z.url().default("https://api.resend.com"),
   EDITORIAL_EMAIL: z.email().default("awlel.journal@gmail.com"),
   ALERT_EMAIL: z.email().optional(),
   SENTRY_DSN: z.url().optional(),

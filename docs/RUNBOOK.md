@@ -99,11 +99,11 @@ Symptoms: editors see “The upload didn't finish” or the progress bar stops.
    “emails stay queued until both are set”. Once both are set and the site redeployed, the waiting emails go
    out on the next scheduled run (within about 30 minutes). Emails that waited more than two weeks are dropped
    instead, with a “job dropped” line in the logs, because they would arrive too late to be useful.
-4. **Sign-up confirmations, password resets or invitations not arriving** (these come from Supabase, not from
-   the queue): Supabase → Authentication → Emails → SMTP Settings must have custom SMTP switched on. Without it
-   Supabase emails only members of your Supabase team. Then check Authentication → Rate Limits (*Rate limit for
-   sending emails*, about 100 an hour) and Supabase → Logs → Auth for errors. If the email arrives but its link
-   says it is invalid, check the templates match `docs/LAUNCH_GUIDE.md`, step 6, and that the Site URL under
+4. **Sign-up confirmations, password resets or invitations not arriving:** once `RESEND_API_KEY` and
+   `EMAIL_FROM` are set, the site sends these itself, through the same queue as every other email, so the
+   checks above apply. (Before that, Supabase sends them, to members of your Supabase team only.) If the email
+   arrives but its link says it is invalid or expired, ask for a new one: each link works once and expires
+   after an hour (Supabase → Authentication → Emails → *Email OTP Expiration*). Also check the Site URL under
    Authentication → URL Configuration is the site's exact address.
 5. One person not receiving mail: check **Email delivery** for their address under suppressed addresses (it
    bounced or they marked us as spam). If they confirm the address works, press **Allow again**. Also ask
@@ -201,8 +201,8 @@ restores the database (not Storage files) in place. If that works, stop here.
    lists them, so you can ask editors to re-upload those.
 5. **Point the site at it** (15 min): in Vercel, update `NEXT_PUBLIC_SUPABASE_URL`, the anon/publishable key
    and `SUPABASE_SERVICE_ROLE_KEY`, then redeploy. Update the GitHub secrets that name the project
-   (`SUPABASE_DB_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`). Repeat `docs/LAUNCH_GUIDE.md` steps 2 and 6
-   and the custom SMTP settings (step 8) in the new project: they aren't part of the backup.
+   (`SUPABASE_DB_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`). Repeat `docs/LAUNCH_GUIDE.md` step 2 in the new
+   project: it isn't part of the backup.
 6. **Check** (15 min): sign in as Super Admin; open an issue, an article and a download; Admin → Operations
    all green; your site address followed by `/api/health` shows `"status":"ok"`.
 7. Tell editors which day the data is from; anything after that (new submissions, edits) must be redone.

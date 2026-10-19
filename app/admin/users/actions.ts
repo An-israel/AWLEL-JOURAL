@@ -5,6 +5,7 @@ import { z } from "zod";
 import { userWithRole } from "@/lib/auth";
 import { siteUrl } from "@/lib/env.public";
 import { ROLES } from "@/lib/roles";
+import { accountEmailsBySite, inviteByEmail } from "@/lib/server/auth-email";
 import { logger } from "@/lib/server/logger";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -74,13 +75,24 @@ export async function inviteUser(_prev: InviteState, fd: FormData): Promise<Invi
   const { email, fullName, role } = parsed.data;
 
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-    data: { full_name: fullName },
-    redirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent("/reset-password")}`,
-  });
-  if (error || !data.user) {
-    const exists = error?.code === "email_exists" || /already been registered/i.test(error?.message ?? "");
-    if (!exists) logger.error({ code: error?.code }, "invite failed");
+  // The site sends the invitation itself once Resend is set up; until then,
+  // Supabase does (to its own team only).
+  let userId: string | null = null;
+  let exists = false;
+  if (accountEmailsBySite()) {
+    const result = await inviteByEmail({ email, fullName, role, invitedBy: actor.fullName });
+    if (result.ok) userId = result.userId;
+    else exists = result.reason === "exists";
+  } else {
+    const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
+      data: { full_name: fullName },
+      redirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent("/reset-password")}`,
+    });
+    userId = data.user?.id ?? null;
+    exists = error?.code === "email_exists" || /already been registered/i.test(error?.message ?? "");
+    if (error && !exists) logger.error({ code: error.code }, "invite failed");
+  }
+  if (!userId) {
     return {
       status: "error",
       values,
@@ -92,10 +104,10 @@ export async function inviteUser(_prev: InviteState, fd: FormData): Promise<Invi
 
   // Keep the JWT's app_metadata in step, then set the role as the Super Admin
   // (so the audit log records who granted it).
-  await admin.auth.admin.updateUserById(data.user.id, { app_metadata: { role } });
+  await admin.auth.admin.updateUserById(userId, { app_metadata: { role } });
   if (role !== "author") {
     const supabase = await createSupabaseServerClient();
-    const { error: roleError } = await supabase.from("profiles").update({ role }).eq("id", data.user.id);
+    const { error: roleError } = await supabase.from("profiles").update({ role }).eq("id", userId);
     if (roleError) {
       logger.error({ err: roleError }, "invite: role update failed");
       return {
@@ -107,7 +119,7 @@ export async function inviteUser(_prev: InviteState, fd: FormData): Promise<Invi
   await admin.from("domain_events").insert({
     event_type: "user.invited",
     aggregate_type: "profile",
-    aggregate_id: data.user.id,
+    aggregate_id: userId,
     actor_id: actor.id,
     payload: { role },
   });

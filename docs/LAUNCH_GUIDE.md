@@ -97,81 +97,26 @@ Vercel → **Deployments** → the newest one → **⋯** → **Redeploy**. Afte
 
 If it still says Error, open it and copy the last red lines of the **Build Logs** into the chat.
 
-## Step 6: Update the email templates (Supabase)
+## Step 6: Email templates (nothing to do)
 
-Supabase's standard emails contain links that work only in the same browser that asked for them, so a
-confirmation or password-reset link opened on a phone (or in another browser) fails, and **invitations to
-editors and reviewers don't work at all**. Replace them with the versions below, which work anywhere.
+The site sends its own account emails (sign-up confirmation, password reset, invitations) in the journal's
+design, once email is set up in step 8. Supabase then sends nothing itself, so its **SMTP Settings** and email
+**Templates** can stay as they are.
 
-Supabase → **Authentication** → **Emails** → **Templates**. For each template below: open its tab, replace the
-**Subject** and the whole **Message body** with the text given (select everything in the box, then paste), and
-press **Save**. Copy each body exactly, including `{{ .SiteURL }}` and `{{ .TokenHash }}`: Supabase fills
-those in for every email.
-
-**Confirm sign up**
-
-Subject: `Confirm your AWLEL account`
-
-```html
-<h2>Confirm your email address</h2>
-<p>Thank you for creating an account on the AWLEL journal website. Please confirm your email address:</p>
-<p><a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email&next=/account">Confirm my email address</a></p>
-<p>If you didn't create an account, you can ignore this email.</p>
-```
-
-**Invite user**
-
-Subject: `You have been invited to the AWLEL journal`
-
-```html
-<h2>You have been invited</h2>
-<p>You have been invited to join the AWLEL journal website as a member of its editorial team. Follow this link to accept and choose your password:</p>
-<p><a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=invite&next=/reset-password">Accept the invitation</a></p>
-<p>If you weren't expecting this, you can ignore this email.</p>
-```
-
-**Magic link** (the site doesn't send these today; this keeps the template correct if it ever does)
-
-Subject: `Your AWLEL sign-in link`
-
-```html
-<h2>Sign in to AWLEL</h2>
-<p>Follow this link to sign in:</p>
-<p><a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email&next=/account">Sign in</a></p>
-<p>If you didn't ask for this, you can ignore this email.</p>
-```
-
-**Change email address**
-
-Subject: `Confirm your new email address for AWLEL`
-
-```html
-<h2>Confirm your new email address</h2>
-<p>Follow this link to confirm changing your AWLEL account's email address from {{ .Email }} to {{ .NewEmail }}:</p>
-<p><a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email_change&next=/account">Confirm the change</a></p>
-<p>If you didn't ask for this, please contact the journal.</p>
-```
-
-**Reset password**
-
-Subject: `Reset your AWLEL password`
-
-```html
-<h2>Reset your password</h2>
-<p>Someone (hopefully you) asked to reset the password for your AWLEL account. Follow this link to choose a new one:</p>
-<p><a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=recovery&next=/reset-password">Choose a new password</a></p>
-<p>If you didn't ask for this, you can ignore this email; your password stays the same.</p>
-```
-
-Where each link leads: a sign-up confirmation signs the person in and opens their **account** page; an
-invitation and a password reset sign them in and open **Choose a password**. Leave the **Reauthentication**
-template as it is: the site doesn't use it.
+*Optional, for trying the site before step 8:* until then Supabase sends these emails (to members of your
+Supabase team only). To give them the journal's design too, open Supabase → **Authentication** → **Emails** →
+**Templates**, and for **Confirm sign up**, **Invite user**, **Magic link**, **Change email address** and
+**Reset password** paste the matching file from
+[`supabase/templates`](https://github.com/An-israel/AWLEL-JOURAL/tree/HEAD/supabase/templates) (open the file,
+**Copy raw file**) into **Message body**, and **Save**. The subjects are listed in
+[`supabase/config.toml`](https://github.com/An-israel/AWLEL-JOURAL/blob/HEAD/supabase/config.toml) under
+`auth.email.template`.
 
 ## Step 7: Make yourself the Super Admin
 
 1. On the live site, click **Sign in** → **Create an account**, and sign up with your email.
-2. Open the confirmation email from Supabase and click the link. (It reaches you because you own the Supabase
-   project; other people's sign-up emails only arrive after step 8.)
+2. Open the confirmation email and click the link. (Before step 8 it comes from Supabase and reaches you
+   because you own the Supabase project; other people's sign-up emails only arrive after step 8.)
 3. Open
    [`supabase/setup/make-super-admin.sql`](https://github.com/An-israel/AWLEL-JOURAL/blob/HEAD/supabase/setup/make-super-admin.sql),
    copy it, paste it into Supabase → **SQL Editor** → **New query**, replace `YOUR-EMAIL@example.com` with the
@@ -192,12 +137,9 @@ Follow [`docs/DOMAIN_SETUP.md`](DOMAIN_SETUP.md):
    **Site URL** and **Redirect URLs** (step 2) to the domain's exact address.
 2. **Part 2, email:** verify the domain in Resend and add `RESEND_API_KEY` and `EMAIL_FROM` in Vercel (both of
    them; one alone sends nothing), then redeploy. Emails that were waiting go out within about 30 minutes.
-3. **Supabase custom SMTP** (Part 2, step 4): Supabase → **Authentication** → **Emails** → **SMTP Settings** →
-   enable custom SMTP with Resend's details. This is what lets Supabase email people outside your team.
-4. **Raise Supabase's email limit:** Supabase → **Authentication** → **Rate Limits** → *Rate limit for sending
-   emails*: set it to about **100** an hour and **Save**. (This setting only appears once custom SMTP is on.
-   Without raising it, a busy submission day can block sign-ups.)
-5. **Test it:** sign up on the site with an address that is *not* in your Supabase team (for example a
+   That is all: the site then sends every email itself, account emails included, so Supabase needs **no SMTP
+   settings** and no change to its email limits.
+3. **Test it:** sign up on the site with an address that is *not* in your Supabase team (for example a
    colleague's), and check the confirmation email arrives and its link works, ideally opened on a phone.
 
 ## Step 9: Before announcing the site
