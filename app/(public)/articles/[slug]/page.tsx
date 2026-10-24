@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Quote } from "lucide-react";
+import { BookOpen, Quote } from "lucide-react";
 import { notFound, permanentRedirect } from "next/navigation";
 import { Suspense } from "react";
 import { ArticleStats } from "@/components/catalog/article-stats";
@@ -11,7 +11,7 @@ import { CitePanel } from "@/components/catalog/cite-panel";
 import { DownloadLinks } from "@/components/catalog/download-links";
 import { OrcidLink } from "@/components/catalog/orcid-link";
 import { pageRange } from "@/components/catalog/page-range";
-import { PdfPreview } from "@/components/catalog/pdf-preview";
+import { PdfReader } from "@/components/catalog/pdf-reader";
 import { RichText } from "@/components/catalog/rich-text";
 import { ShareLinks } from "@/components/catalog/share-links";
 import { JsonLd } from "@/components/seo/json-ld";
@@ -91,7 +91,7 @@ function citationInput(
     journal,
     year: article.issue.year,
     volume: article.issue.volumeNumber,
-    issue: article.issue.issuesInVolume > 1 ? article.issue.issueNumber : null,
+    issue: article.issue.issueNumber,
     firstPage: article.firstPage,
     lastPage: article.lastPage,
     doi: article.doi,
@@ -323,6 +323,15 @@ async function ArticleContent({ article }: { article: ArticleDetail }) {
                 page, so offer them here as well (item 23). Desktop keeps
                 the sticky sidebar only. No ids here, so none are repeated. */}
             <div className="mt-8 flex flex-wrap items-center gap-2 lg:hidden">
+              {article.hasPdf ? (
+                <a
+                  href="#read"
+                  className="inline-flex items-center gap-1.5 rounded-md bg-navy px-2.5 py-1.5 text-xs font-semibold text-white no-underline hover:bg-royal"
+                >
+                  <BookOpen aria-hidden className="size-3.5" />
+                  Read online
+                </a>
+              ) : null}
               <DownloadLinks options={downloadOptions} />
               <a
                 href="#cite"
@@ -362,7 +371,14 @@ async function ArticleContent({ article }: { article: ArticleDetail }) {
             ) : null}
           </section>
 
-          {article.hasPdf ? <PdfPreview src={pdfPath} title={article.title} /> : null}
+          {article.hasPdf ? (
+            <PdfReader
+              src={pdfPath}
+              title={article.title}
+              heading="Read the full article"
+              downloadHref={articleDownloadPath(article.id, "pdf")}
+            />
+          ) : null}
 
           <div className="grid gap-12 md:grid-cols-2">
             <RelatedList
@@ -388,9 +404,18 @@ async function ArticleContent({ article }: { article: ArticleDetail }) {
             <h2 id="download-title" className="text-base font-semibold">
               Read and download
             </h2>
-            <div className="mt-4">
+            <div className="mt-4 space-y-2.5">
+              {article.hasPdf ? (
+                <a
+                  href="#read"
+                  className="flex items-center justify-center gap-2 rounded-md bg-navy px-4 py-3 font-medium text-white no-underline transition-colors hover:bg-royal"
+                >
+                  <BookOpen aria-hidden className="size-4" />
+                  Read the full article
+                </a>
+              ) : null}
               {article.hasPdf || article.hasDocx ? (
-                <DownloadLinks variant="large" options={downloadOptions} />
+                <DownloadLinks variant="large" options={downloadOptions} secondary={article.hasPdf} />
               ) : (
                 <p className="text-sm text-ink-muted">
                   The full text of this article will be available to download soon.

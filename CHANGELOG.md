@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The project follows
 
 ## [Unreleased]
 
+### Reading on the site, two ways to submit, issue numbers everywhere
+
+- **Read online:** articles and full issues open in a reader on the page (PDF.js), showing the uploaded PDF
+  page by page with zoom, page numbers, full screen and selectable text, on computers and phones. Downloading
+  is a separate, optional button, and reading isn't counted as a download.
+- **Submitting:** the Submit page is open to everyone and shows two ways to submit: online (sign in, form)
+  or by email to the journal's address, with what to include. The guidelines page shows the same. The online
+  form asks for an email address (from the account) and a phone number, both required; editors see them on
+  the submission and in the new-submission email, reviewers never do (database update 18).
+- **Issue numbers:** every label, cover, citation (APA `26(1)`, MLA `no. 1`, BibTeX, RIS), Scholar tag and
+  file name now includes the issue, even when a volume has a single issue.
+- **Archive:** each year is its own section, alternating soft blue-grey and cream bands.
+
 ### Branded emails, sent by the site
 
 - Every email the site sends now has the journal's design: the AWLEL header in navy with the site's colour

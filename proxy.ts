@@ -11,7 +11,9 @@ import { NextResponse, type NextRequest } from "next/server";
  * this is only the first, cheap gate.
  */
 
-const PROTECTED_PREFIXES = ["/admin", "/account", "/submit"];
+// /submit is open to everyone: it explains both ways to submit and asks
+// people to sign in only for the online form.
+const PROTECTED_PREFIXES = ["/admin", "/account"];
 
 export async function proxy(request: NextRequest) {
   const requestId = request.headers.get("x-request-id") ?? crypto.randomUUID();

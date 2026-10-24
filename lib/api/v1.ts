@@ -46,7 +46,7 @@ export function issueJson(
   return {
     id: issue.id,
     volume: issue.volumeNumber,
-    issue: issue.issuesInVolume > 1 ? issue.issueNumber : null,
+    issue: issue.issueNumber,
     year: issue.year,
     month: issue.month,
     legacy_number: issue.legacyNumber,
@@ -93,7 +93,7 @@ export function articleDetailJson(a: ArticleDetail, settings: SiteSettings) {
     journal: settings.journalName,
     year: a.issue.year,
     volume: a.issue.volumeNumber,
-    issue: a.issue.issuesInVolume > 1 ? a.issue.issueNumber : null,
+    issue: a.issue.issueNumber,
     firstPage: a.firstPage,
     lastPage: a.lastPage,
     doi: a.doi,

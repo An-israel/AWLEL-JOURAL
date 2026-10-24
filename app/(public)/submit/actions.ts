@@ -60,6 +60,8 @@ export async function createSubmission(input: SubmissionInput): Promise<ActionRe
       category_id: s.categoryId,
       citation_style: s.citationStyle,
       cover_letter: s.coverLetter || null,
+      contact_email: s.contactEmail,
+      contact_phone: s.contactPhone,
       declarations: { ...s.declarations, confirmedAt: new Date().toISOString() },
       idempotency_key: s.idempotencyKey,
     })
@@ -113,7 +115,7 @@ export async function finalizeSubmission(submissionId: string): Promise<ActionRe
   const supabase = await createSupabaseServerClient();
   const { data: sub } = await supabase
     .from("submissions")
-    .select("id, title")
+    .select("id, title, contact_email, contact_phone")
     .eq("id", submissionId)
     .eq("author_id", user.id)
     .maybeSingle();
@@ -140,8 +142,9 @@ export async function finalizeSubmission(submissionId: string): Promise<ActionRe
     await notifySubmissionReceived({
       id: sub.id,
       title: sub.title,
-      authorEmail: user.email,
+      authorEmail: sub.contact_email || user.email,
       authorName: user.fullName,
+      contactPhone: sub.contact_phone,
     });
   }
   revalidatePath(`/account/submissions/${submissionId}`);

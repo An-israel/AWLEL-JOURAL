@@ -47,6 +47,9 @@ test("author submits a manuscript", async ({ page }) => {
   await page.getByLabel("Subject area", { exact: true }).selectOption({ label: "African Literature" });
   await page.getByLabel("MLA 8th edition (Works Cited)").check();
   await page.getByLabel("Your institution", { exact: true }).fill("University of Nigeria, Nsukka");
+  // The account email is filled in; the phone number is required.
+  await expect(page.getByLabel("Email address", { exact: true })).toHaveValue(author.email);
+  await page.getByLabel("Phone number", { exact: true }).fill("+234 803 123 4567");
   await page.getByRole("button", { name: "Add a co-author" }).click();
   await page.getByLabel("Name", { exact: true }).fill(`Bola Coauthor ${run}`);
   await page.getByLabel("Manuscript (.docx, required)").setInputFiles("tests/e2e/fixtures/Okafor_bulk.docx");
@@ -65,6 +68,12 @@ test("author submits a manuscript", async ({ page }) => {
   submissionId = page.url().split("/").pop()!.split("?")[0];
 
   const db = adminClient();
+  const { data: contact } = await db
+    .from("submissions")
+    .select("contact_email, contact_phone")
+    .eq("id", submissionId)
+    .single();
+  expect(contact).toEqual({ contact_email: author.email, contact_phone: "+234 803 123 4567" });
   const { data: files } = await db.from("submission_files").select("kind").eq("submission_id", submissionId);
   expect(files).toEqual([{ kind: "original" }]);
   const { data: jobs } = await db

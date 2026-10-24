@@ -1,16 +1,31 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { requireUser } from "@/lib/auth";
+import { SubmissionRoutes } from "@/components/site/submission-routes";
+import { getCurrentUser } from "@/lib/auth";
 import { getCategoriesWithCounts } from "@/lib/data/catalog";
 import { getFeatureFlags } from "@/lib/data/feature-flags";
+import { getSiteSettings } from "@/lib/data/site-settings";
 import { SubmissionForm } from "./submission-form";
 
-export const metadata: Metadata = { title: "Submit a manuscript", robots: { index: false } };
+export const metadata: Metadata = {
+  title: "Submit a manuscript",
+  description: "Submit a manuscript to AWLEL online or by email.",
+};
 
 async function Content() {
-  const user = await requireUser("/submit");
-  const [flags, categories] = await Promise.all([getFeatureFlags(), getCategoriesWithCounts()]);
+  // Open to everyone: signed-out visitors see both ways to submit, and sign
+  // in only if they choose the online form.
+  const [user, flags, categories, settings] = await Promise.all([
+    getCurrentUser(),
+    getFeatureFlags(),
+    getCategoriesWithCounts(),
+    getSiteSettings(),
+  ]);
+  const routes = (
+    <SubmissionRoutes email={settings.contactEmail} signedIn={Boolean(user)} formAnchor="#submission-form" />
+  );
+  if (!user) return routes;
 
   if (user.role === "reviewer") {
     return (
@@ -31,11 +46,22 @@ async function Content() {
     );
   }
   return (
-    <SubmissionForm
-      categories={categories.map((c) => ({ id: c.id, name: c.name }))}
-      defaultAffiliation={user.affiliation ?? ""}
-      authorName={user.fullName}
-    />
+    <div className="space-y-14">
+      {routes}
+      <section id="submission-form" aria-labelledby="form-title" className="scroll-mt-32">
+        <h2 id="form-title" className="text-2xl">
+          The submission form
+        </h2>
+        <div className="mt-6">
+          <SubmissionForm
+            categories={categories.map((c) => ({ id: c.id, name: c.name }))}
+            defaultAffiliation={user.affiliation ?? ""}
+            authorName={user.fullName}
+            defaultEmail={user.email}
+          />
+        </div>
+      </section>
+    </div>
   );
 }
 

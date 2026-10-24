@@ -9,6 +9,13 @@ export const coAuthorSchema = z.object({
     .default(""),
 });
 
+/** Digits with optional +, spaces, dashes, dots and brackets; at least 7 digits. */
+export const phoneSchema = z
+  .string()
+  .trim()
+  .regex(/^\+?[0-9(][0-9 ().-]{5,23}[0-9]$/, "Enter a phone number, for example +234 803 123 4567.")
+  .refine((v) => v.replace(/\D/g, "").length >= 7, "Enter a phone number, for example +234 803 123 4567.");
+
 export const submissionSchema = z.object({
   idempotencyKey: z.uuid(),
   title: z.string().trim().min(5, "Enter the title of your manuscript.").max(500),
@@ -24,6 +31,9 @@ export const submissionSchema = z.object({
   categoryId: z.uuid("Choose the subject area."),
   citationStyle: z.enum(["apa7", "mla8"], { error: "Choose the citation style your manuscript uses." }),
   affiliation: z.string().trim().min(2, "Enter your institution.").max(300),
+  // How the editors can reach the author (the account email, unless changed).
+  contactEmail: z.email("Enter the email address we can reach you at.").max(320),
+  contactPhone: phoneSchema,
   coAuthors: z.array(coAuthorSchema).max(20),
   coverLetter: z.string().trim().max(5000).optional().default(""),
   declarations: z.object({

@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
+import { BookOpen } from "lucide-react";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { Suspense } from "react";
 import { ArticleRow } from "@/components/catalog/article-row";
 import { Breadcrumbs } from "@/components/catalog/breadcrumbs";
 import { DownloadLinks } from "@/components/catalog/download-links";
+import { PdfReader } from "@/components/catalog/pdf-reader";
 import { IssueCover } from "@/components/catalog/issue-cover";
 import { RichText } from "@/components/catalog/rich-text";
 import { JsonLd } from "@/components/seo/json-ld";
@@ -69,7 +71,7 @@ async function IssueContent({ issue }: { issue: IssueDetail }) {
     },
     {
       volume: issue.volumeNumber,
-      issue: issue.issuesInVolume > 1 ? issue.issueNumber : null,
+      issue: issue.issueNumber,
       year: issue.year,
       label: issue.label,
       url: `${siteUrl}${issue.path}`,
@@ -118,9 +120,19 @@ async function IssueContent({ issue }: { issue: IssueDetail }) {
                   <dd className="font-medium">{issue.articles.length}</dd>
                 </div>
               </dl>
-              <div className="mt-8 max-w-md">
+              <div className="mt-8 max-w-md space-y-2.5">
+                {issue.fullPdf ? (
+                  <a
+                    href="#read"
+                    className="flex items-center justify-center gap-2 rounded-md bg-navy px-4 py-3 font-medium text-white no-underline transition-colors hover:bg-royal"
+                  >
+                    <BookOpen aria-hidden className="size-4" />
+                    Read the full issue online
+                  </a>
+                ) : null}
                 <DownloadLinks
                   variant="large"
+                  secondary={Boolean(issue.fullPdf)}
                   options={[
                     issue.fullPdf && {
                       href: issueDownloadPath(issue.id, "pdf"),
@@ -155,6 +167,18 @@ async function IssueContent({ issue }: { issue: IssueDetail }) {
           </div>
         </div>
       </div>
+
+      {issue.fullPdf ? (
+        <div className="mx-auto max-w-site px-4 pt-14 sm:px-6 lg:px-8">
+          <PdfReader
+            id="read"
+            src={`${issueDownloadPath(issue.id, "pdf")}&inline=1`}
+            title={issue.label}
+            heading="Read the full issue"
+            downloadHref={issueDownloadPath(issue.id, "pdf")}
+          />
+        </div>
+      ) : null}
 
       <section className="mx-auto max-w-site px-4 pt-14 sm:px-6 lg:px-8" aria-labelledby="contents-title">
         <div className="flex items-baseline justify-between border-b-2 border-navy pb-3">

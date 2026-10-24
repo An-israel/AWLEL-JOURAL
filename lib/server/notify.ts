@@ -40,7 +40,15 @@ export async function notifySubmissionReceived(s: {
   title: string;
   authorEmail: string;
   authorName: string;
+  contactPhone?: string | null;
 }) {
+  const contact = [
+    `Author: ${s.authorName || "(no name)"}`,
+    `Email: ${s.authorEmail}`,
+    s.contactPhone ? `Phone: ${s.contactPhone}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
   await Promise.all([
     send(
       s.authorEmail,
@@ -50,7 +58,7 @@ export async function notifySubmissionReceived(s: {
     ),
     toEditors(
       `New submission: ${s.title}`,
-      `A new manuscript has been submitted.\n\nTitle: ${s.title}\n\nOpen it in the editorial dashboard:\n${adminLink(s.id)}`,
+      `A new manuscript has been submitted.\n\nTitle: ${s.title}\n${contact}\n\nOpen it in the editorial dashboard:\n${adminLink(s.id)}`,
       `submission-received-editors:${s.id}`,
     ),
   ]);

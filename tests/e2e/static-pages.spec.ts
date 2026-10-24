@@ -31,7 +31,8 @@ test("guidelines list the required structure and end with a submit button", asyn
   await page.goto("/submission-guidelines");
   await expect(page.getByText("Theoretical Framework")).toBeVisible();
   await expect(page.getByText(/indented paragraphing style/)).toBeVisible();
-  await expect(page.getByRole("link", { name: "Submit your manuscript" })).toHaveAttribute("href", "/submit");
+  await expect(page.getByRole("link", { name: "Submit online" })).toHaveAttribute("href", "/submit");
+  await expect(page.getByRole("link", { name: "Write the email" })).toHaveAttribute("href", /^mailto:/);
 });
 
 test("editorial board shows the editor and all consultants", async ({ page }) => {
@@ -101,4 +102,16 @@ test.describe("contact form", () => {
       },
     ]);
   });
+});
+
+test("the submit page offers both ways to submit, without signing in first", async ({ page }) => {
+  const response = await page.goto("/submit");
+  expect(response?.status()).toBe(200);
+  await expect(page).toHaveURL(/\/submit$/);
+  await expect(page.getByRole("heading", { name: "Two ways to submit" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign in to submit" })).toHaveAttribute(
+    "href",
+    "/login?next=%2Fsubmit",
+  );
+  await expect(page.getByRole("main").getByText("awlel.journal@gmail.com")).toBeVisible();
 });

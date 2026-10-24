@@ -5,12 +5,15 @@ import { downloadIssue } from "@/lib/server/downloads";
 import { notFound } from "@/lib/server/errors";
 import { RATE_LIMITS } from "@/lib/server/rate-limit";
 
-const query = z.object({ format: z.enum(["pdf", "docx"]) });
+const query = z.object({
+  format: z.enum(["pdf", "docx"]),
+  inline: z.literal("1").optional(),
+});
 
 export async function GET(request: NextRequest, { params }: RouteContext<"/api/download/issue/[id]">) {
   const { id } = await params;
   return apiRoute({ query, rateLimit: RATE_LIMITS.download }, async (ctx) => {
     if (!z.uuid().safeParse(id).success) throw notFound("This file is not available.");
-    return downloadIssue(ctx.request.headers, id, ctx.query.format);
+    return downloadIssue(ctx.request.headers, id, ctx.query.format, ctx.query.inline === "1");
   })(request);
 }

@@ -59,25 +59,33 @@ export function ArchiveBrowser({ groups }: { groups: YearGroup[] }) {
           ) : null}
         </div>
       </aside>
-      <div className="space-y-16" aria-live="polite">
-        {visible.map((g) => (
-          <section
-            key={g.year}
-            id={`year-${g.year}`}
-            aria-labelledby={`year-${g.year}-title`}
-            className="scroll-mt-40"
-          >
-            <div className="flex items-baseline gap-4 border-b border-line pb-3">
-              <h2 id={`year-${g.year}-title`} className="text-3xl font-bold text-navy">
-                {g.year}
-              </h2>
-              <span className="text-sm text-ink-muted">
-                {g.issueCount} {g.issueCount === 1 ? "issue" : "issues"}
-              </span>
-            </div>
-            {g.content}
-          </section>
-        ))}
+      <div className="space-y-6" aria-live="polite">
+        {visible.map((g) => {
+          // Years alternate between a soft blue-grey and a soft cream band, so
+          // each one reads as its own section. The colour follows the year,
+          // not the filter, so a year keeps its colour.
+          const cream = groups.indexOf(g) % 2 === 1;
+          return (
+            <section
+              key={g.year}
+              id={`year-${g.year}`}
+              aria-labelledby={`year-${g.year}-title`}
+              className={`scroll-mt-40 rounded-xl border-l-4 px-5 pt-5 pb-6 sm:px-8 sm:pt-6 ${
+                cream ? "border-gold bg-[#FBF5E9]" : "border-navy bg-[#EDF1F9]"
+              }`}
+            >
+              <div className="flex items-baseline gap-4 border-b border-black/10 pb-3">
+                <h2 id={`year-${g.year}-title`} className="text-3xl font-bold text-navy">
+                  {g.year}
+                </h2>
+                <span className="text-sm text-ink-muted">
+                  {g.issueCount} {g.issueCount === 1 ? "issue" : "issues"}
+                </span>
+              </div>
+              {g.content}
+            </section>
+          );
+        })}
       </div>
     </div>
   );

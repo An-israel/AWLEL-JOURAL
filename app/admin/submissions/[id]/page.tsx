@@ -27,7 +27,7 @@ async function Content({ params }: { params: Props["params"] }) {
     supabase
       .from("submissions")
       .select(
-        `id, version, title, abstract, keywords, status, citation_style, cover_letter, declarations, created_at, article_id,
+        `id, version, title, abstract, keywords, status, citation_style, cover_letter, contact_email, contact_phone, declarations, created_at, article_id,
          finalised_at, review_round, revision_due_date,
          category:categories(name),
          author:profiles!submissions_author_id_fkey(full_name, email),
@@ -126,6 +126,27 @@ async function Content({ params }: { params: Props["params"] }) {
                   </li>
                 ))}
             </ul>
+            {s.contact_email || s.contact_phone ? (
+              <dl className="mt-4 grid gap-x-6 gap-y-1 rounded-md bg-paper px-4 py-3 text-sm sm:grid-cols-[auto_1fr]">
+                <dt className="font-medium text-ink-muted sm:col-span-2">How to reach the author</dt>
+                {s.contact_email ? (
+                  <>
+                    <dt className="text-ink-muted">Email</dt>
+                    <dd>
+                      <a href={`mailto:${s.contact_email}`}>{s.contact_email}</a>
+                    </dd>
+                  </>
+                ) : null}
+                {s.contact_phone ? (
+                  <>
+                    <dt className="text-ink-muted">Phone</dt>
+                    <dd>
+                      <a href={`tel:${s.contact_phone.replace(/[^\d+]/g, "")}`}>{s.contact_phone}</a>
+                    </dd>
+                  </>
+                ) : null}
+              </dl>
+            ) : null}
             {s.cover_letter ? (
               <>
                 <h3 className="mt-5 text-sm font-semibold tracking-wide text-ink-muted uppercase">

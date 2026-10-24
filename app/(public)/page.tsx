@@ -239,7 +239,8 @@ export default async function HomePage() {
             </h2>
             <p className="mt-4 text-white/85">
               We welcome original research on African and world literatures, English language studies and
-              linguistics. Read the guidelines, prepare your manuscript in Word, and submit it online.
+              linguistics. Read the guidelines, prepare your manuscript in Word, and submit it online or by
+              email.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <Link

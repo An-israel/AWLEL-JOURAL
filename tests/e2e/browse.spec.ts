@@ -6,12 +6,12 @@ test("archive → issue → article", async ({ page }) => {
   await page.goto("/issues");
   await expect(page.getByRole("heading", { level: 1, name: "All issues" })).toBeVisible();
   await page
-    .getByRole("link", { name: /Volume 26 \(June 2026\)/ })
+    .getByRole("link", { name: /Volume 26, Issue 1 \(June 2026\)/ })
     .first()
     .click();
 
   await expect(page).toHaveURL(/\/issues\/26\/1$/);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Volume 26 (June 2026)");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Volume 26, Issue 1 (June 2026)");
   const contents = page.getByRole("region", { name: "Contents" });
   await expect(contents.getByRole("article")).toHaveCount(3);
   // Every row shows its category at a glance.
@@ -26,7 +26,7 @@ test("archive → issue → article", async ({ page }) => {
   await expect(page).toHaveURL(/\/articles\/sample-code-switching/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Code-Switching and Identity");
   await expect(page.getByText("Department of Linguistics, Igbo and Other Nigerian Languages")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Volume 26 (June 2026)" }).first()).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "Volume 26, Issue 1 (June 2026)" }).first()).toHaveAttribute(
     "href",
     "/issues/26/1",
   );
@@ -39,17 +39,19 @@ test("cite panel formats APA, MLA and BibTeX and offers an RIS file", async ({ p
   const cite = page.getByRole("region", { name: "Cite this article" });
   await expect(cite.getByRole("tabpanel")).toContainText("Eze, C. J., & Nwosu, A. P. (2026).");
   await expect(cite.locator("i").first()).toHaveText("African, World Literature and English Language");
+  // Always with the issue, so the citation leads to one issue: 26(1).
+  await expect(cite.getByRole("tabpanel")).toContainText("26(1), 19–36.");
 
   await cite.getByRole("tab", { name: "MLA 8th" }).click();
   await expect(cite.getByRole("tabpanel")).toContainText("Eze, Chukwuemeka J., and Amaka P. Nwosu.");
-  await expect(cite.getByRole("tabpanel")).toContainText("vol. 26, 2026, pp. 19–36.");
+  await expect(cite.getByRole("tabpanel")).toContainText("vol. 26, no. 1, 2026, pp. 19–36.");
 
   await cite.getByRole("tab", { name: "BibTeX" }).click();
   await expect(cite.getByRole("tabpanel")).toContainText("@article{eze2026code");
 
   const download = page.waitForEvent("download");
   await cite.getByRole("button", { name: "Download .ris" }).click();
-  expect((await download).suggestedFilename()).toBe("AWLEL_Vol26_Eze_2026.ris");
+  expect((await download).suggestedFilename()).toBe("AWLEL_Vol26_Issue1_Eze_2026.ris");
 });
 
 test("category page lists its articles and sorts by most read", async ({ page }) => {

@@ -13,10 +13,13 @@ export function DownloadLinks({
   options,
   variant = "compact",
   describedBy,
+  secondary = false,
 }: {
   options: (DownloadOption | null | false)[];
   variant?: "compact" | "large";
   describedBy?: string;
+  /** Outline style only, when a "Read online" button is the main action. */
+  secondary?: boolean;
 }) {
   const available = options.filter((o): o is DownloadOption => Boolean(o));
   if (available.length === 0) return null;
@@ -24,7 +27,7 @@ export function DownloadLinks({
     <div className={variant === "large" ? "flex flex-col gap-2.5 sm:flex-row lg:flex-col" : "flex gap-2"}>
       {available.map((option, i) => {
         const size = formatFileSize(option.sizeBytes);
-        const primary = variant === "large" && i === 0;
+        const primary = variant === "large" && i === 0 && !secondary;
         return (
           <a
             key={option.href}

@@ -113,10 +113,11 @@ test.describe("editor content workflows", () => {
 
     // Live on the public site straight away (cache tags expired).
     await page.goto(`/issues/${volume}/1`);
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText(`Volume ${volume} (2099)`);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(`Volume ${volume}, Issue 1 (2099)`);
     await page.getByRole("link", { name: title }).click();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
-    await expect(page.getByRole("link", { name: /Download PDF/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Download PDF/ }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: "Read the full article" })).toBeVisible();
     await expect(page.getByText("Ada Testauthor").first()).toBeVisible();
   });
 
@@ -214,10 +215,18 @@ test.describe("editor content workflows", () => {
     ).find((d) => d["@type"] === "ScholarlyArticle");
     expect(ld).toMatchObject({ "@type": "ScholarlyArticle", name: title, pageStart: "5", pageEnd: "20" });
 
+    // Reading on the site: the reader shows the PDF's pages (reading isn't a download).
+    await tab.getByRole("link", { name: "Read the full article" }).click();
+    await expect(tab.locator("#read canvas").first()).toBeVisible({ timeout: 15_000 });
+    await expect(tab.locator("#read")).toContainText("of 1");
+
     // Download: a clean file name, counted once per reader per day.
     const download = tab.waitForEvent("download");
-    await tab.getByRole("link", { name: /Download PDF/ }).click();
-    expect((await download).suggestedFilename()).toBe(`AWLEL_Vol${volume}_Okafo_2099.pdf`);
+    await tab
+      .getByRole("link", { name: /Download PDF/ })
+      .first()
+      .click();
+    expect((await download).suggestedFilename()).toBe(`AWLEL_Vol${volume}_Issue1_Okafo_2099.pdf`);
     await tab.request.get(`/api/download/article/${articleId}?format=pdf`, { maxRedirects: 0 });
     // Bots are not counted, and a missing format is a 404 rather than a broken link.
     const bot = await tab.request.get(`/api/download/article/${articleId}?format=pdf`, {
@@ -362,7 +371,9 @@ test.describe("editor content workflows", () => {
     await page.getByLabel("Web address").fill(`${slug}-moved`);
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByText(`/categories/${slug}-moved`, { exact: false })).toBeVisible();
-    await page.goto(`/categories/${slug}`);
+    // The old address forwards to the new one. Subject pages stream, so the
+    // forward can happen in the browser, which interrupts the first load.
+    await page.goto(`/categories/${slug}`).catch(() => {});
     await expect(page).toHaveURL(new RegExp(`/categories/${slug}-moved$`));
   });
 

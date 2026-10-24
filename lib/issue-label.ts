@@ -31,14 +31,13 @@ function monthName(month: number | null | undefined): string | null {
 }
 
 /**
- * "Volume 23 (2023)" when the volume has one issue,
- * "Volume 25, Issue 1 (June 2025)" when it has several.
+ * "Volume 25, Issue 1 (June 2025)": always with the issue number, even when a
+ * volume has a single issue, so every citation leads to one issue.
  */
 export function issueLabel(input: IssueLabelInput): string {
   const month = monthName(input.month);
   const when = month ? `${month} ${input.year}` : String(input.year);
-  const issuePart = input.issuesInVolume > 1 ? `, Issue ${input.issueNumber}` : "";
-  return `Volume ${input.volumeNumber}${issuePart} (${when})`;
+  return `Volume ${input.volumeNumber}, Issue ${input.issueNumber} (${when})`;
 }
 
 /** Secondary label for older issues numbered in a running sequence: "No. 19". */
@@ -46,13 +45,9 @@ export function legacyLabel(legacyNumber: number | null | undefined): string | n
   return legacyNumber ? `No. ${legacyNumber}` : null;
 }
 
-/** Compact form for file names and citations: "Vol25_Issue1" or "Vol23". */
-export function issueFileStem(
-  input: Pick<IssueLabelInput, "volumeNumber" | "issueNumber" | "issuesInVolume">,
-): string {
-  return input.issuesInVolume > 1
-    ? `Vol${input.volumeNumber}_Issue${input.issueNumber}`
-    : `Vol${input.volumeNumber}`;
+/** Compact form for file names: "Vol25_Issue1". */
+export function issueFileStem(input: Pick<IssueLabelInput, "volumeNumber" | "issueNumber">): string {
+  return `Vol${input.volumeNumber}_Issue${input.issueNumber}`;
 }
 
 /** Public URL path of an issue. */

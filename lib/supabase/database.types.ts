@@ -1523,6 +1523,8 @@ export type Database = {
           author_id: string;
           category_id: string | null;
           citation_style: Database["public"]["Enums"]["citation_style"];
+          contact_email: string | null;
+          contact_phone: string | null;
           cover_letter: string | null;
           created_at: string;
           declarations: NonNullable<Json>;
@@ -1546,6 +1548,8 @@ export type Database = {
           author_id: string;
           category_id?: string | null;
           citation_style: Database["public"]["Enums"]["citation_style"];
+          contact_email?: string | null;
+          contact_phone?: string | null;
           cover_letter?: string | null;
           created_at?: string;
           declarations?: NonNullable<Json>;
@@ -1568,6 +1572,8 @@ export type Database = {
           author_id?: string;
           category_id?: string | null;
           citation_style?: Database["public"]["Enums"]["citation_style"];
+          contact_email?: string | null;
+          contact_phone?: string | null;
           cover_letter?: string | null;
           created_at?: string;
           declarations?: NonNullable<Json>;

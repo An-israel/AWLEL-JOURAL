@@ -12,7 +12,7 @@ export interface CitationInput {
   journal: string;
   year: number;
   volume: number;
-  /** Omit for volumes with a single issue (matches the site's issue labels). */
+  /** The issue within the volume: always given, so a citation leads to one issue. */
   issue?: number | null;
   firstPage?: number | null;
   lastPage?: number | null;

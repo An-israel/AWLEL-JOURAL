@@ -67,11 +67,9 @@ export async function IssueCover({
         </span>
         <span className="mt-auto mb-[30cqw] font-semibold" style={{ fontSize: "8cqw", lineHeight: 1.1 }}>
           Volume {issue.volumeNumber}
-          {issue.issuesInVolume > 1 ? (
-            <span className="block font-medium text-gold-light" style={{ fontSize: "6cqw" }}>
-              Issue {issue.issueNumber}
-            </span>
-          ) : null}
+          <span className="block font-medium text-gold-light" style={{ fontSize: "6cqw" }}>
+            Issue {issue.issueNumber}
+          </span>
           <span className="block font-normal text-white/80" style={{ fontSize: "4.5cqw" }}>
             {when}
           </span>

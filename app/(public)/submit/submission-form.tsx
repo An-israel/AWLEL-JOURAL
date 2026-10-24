@@ -40,10 +40,12 @@ export function SubmissionForm({
   categories,
   defaultAffiliation,
   authorName,
+  defaultEmail,
 }: {
   categories: { id: string; name: string }[];
   defaultAffiliation: string;
   authorName: string;
+  defaultEmail: string;
 }) {
   const router = useRouter();
   // One key per form: a retry or double click returns the same submission (item 14).
@@ -55,6 +57,8 @@ export function SubmissionForm({
     categoryId: "",
     citationStyle: "" as "" | "apa7" | "mla8",
     affiliation: defaultAffiliation,
+    contactEmail: defaultEmail,
+    contactPhone: "",
     coverLetter: "",
   });
   const [coAuthors, setCoAuthors] = useState<CoAuthor[]>([]);
@@ -289,7 +293,41 @@ export function SubmissionForm({
             />
             <FieldError id="f-affiliation-error">{err("affiliation")}</FieldError>
           </div>
+          <div>
+            <Label htmlFor="f-contactEmail">Email address</Label>
+            <Input
+              id="f-contactEmail"
+              type="email"
+              autoComplete="email"
+              value={form.contactEmail}
+              onChange={set("contactEmail")}
+              className="mt-1.5"
+              aria-invalid={err("contactEmail") ? true : undefined}
+              aria-describedby={describedBy("contactEmail")}
+            />
+            <FieldError id="f-contactEmail-error">{err("contactEmail")}</FieldError>
+          </div>
+          <div>
+            <Label htmlFor="f-contactPhone">Phone number</Label>
+            <Input
+              id="f-contactPhone"
+              type="tel"
+              autoComplete="tel"
+              inputMode="tel"
+              placeholder="+234 803 123 4567"
+              value={form.contactPhone}
+              onChange={set("contactPhone")}
+              className="mt-1.5"
+              aria-invalid={err("contactPhone") ? true : undefined}
+              aria-describedby={describedBy("contactPhone")}
+            />
+            <FieldError id="f-contactPhone-error">{err("contactPhone")}</FieldError>
+          </div>
         </div>
+        <p className="text-sm text-ink-muted">
+          The editors use your email address and phone number only to contact you about this manuscript.
+          Reviewers never see them.
+        </p>
         {coAuthors.map((a, i) => (
           <fieldset
             key={a.key}

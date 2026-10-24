@@ -106,11 +106,12 @@ export async function downloadArticle(
   return redirectToFile(fileId, fileName, inline, format);
 }
 
-/** /api/download/issue/[id]?format=pdf|docx */
+/** /api/download/issue/[id]?format=pdf|docx[&inline=1] */
 export async function downloadIssue(
   headers: Headers,
   issueId: string,
   format: DownloadFormat,
+  inline = false,
 ): Promise<Response> {
   const issue = (await getPublishedIssues()).find((i) => i.id === issueId);
   if (!issue) throw notFound("This file is not available.");
@@ -122,6 +123,9 @@ export async function downloadIssue(
   const fileId = format === "pdf" ? data?.full_pdf_file_id : data?.full_docx_file_id;
   if (!fileId) throw notFound("This file is not available.");
 
-  await recordEvent(headers, format === "pdf" ? "download_pdf" : "download_docx", { issueId });
-  return redirectToFile(fileId, `AWLEL_${issueFileStem(issue)}_Full_Issue.${format}`, false, format);
+  // Reading the full issue on the site is not downloading it.
+  if (!inline) {
+    await recordEvent(headers, format === "pdf" ? "download_pdf" : "download_docx", { issueId });
+  }
+  return redirectToFile(fileId, `AWLEL_${issueFileStem(issue)}_Full_Issue.${format}`, inline, format);
 }
