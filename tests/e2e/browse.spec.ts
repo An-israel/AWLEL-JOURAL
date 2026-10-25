@@ -31,7 +31,7 @@ test("archive → issue → article", async ({ page }) => {
     "/issues/26/1",
   );
   // No files are uploaded for the sample, so no broken download links appear.
-  await expect(page.getByRole("link", { name: /Download (PDF|Word)/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Download PDF/ })).toHaveCount(0);
 });
 
 test("cite panel formats APA, MLA and BibTeX and offers an RIS file", async ({ page }) => {

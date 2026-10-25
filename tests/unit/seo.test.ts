@@ -30,7 +30,6 @@ const meta: ScholarlyArticleMeta = {
   abstract: "An abstract.",
   url: "https://awlel.org/articles/memory",
   pdfUrl: "https://awlel.org/api/download/article/x?format=pdf",
-  docxUrl: null,
 };
 
 describe("Google Scholar tags", () => {

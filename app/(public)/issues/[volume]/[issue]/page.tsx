@@ -140,12 +140,6 @@ async function IssueContent({ issue }: { issue: IssueDetail }) {
                       format: "PDF",
                       sizeBytes: issue.fullPdf.sizeBytes,
                     },
-                    issue.fullDocx && {
-                      href: issueDownloadPath(issue.id, "docx"),
-                      label: "Download full issue (Word)",
-                      format: "Word",
-                      sizeBytes: issue.fullDocx.sizeBytes,
-                    },
                   ]}
                 />
               </div>

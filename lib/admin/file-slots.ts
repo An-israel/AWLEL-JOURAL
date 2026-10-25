@@ -67,7 +67,7 @@ export const SLOT_RULES: Record<FileSlot, SlotRule> = {
     column: "full_pdf_file_id",
   },
   issue_docx: {
-    label: "Full issue (Word)",
+    label: "Full issue (Word, staff only: never offered to readers)",
     bucket: "published-files",
     fileRole: "issue_docx",
     mimes: [MIME.docx],
@@ -87,7 +87,7 @@ export const SLOT_RULES: Record<FileSlot, SlotRule> = {
     column: "pdf_file_id",
   },
   article_docx: {
-    label: "Article Word file",
+    label: "Article Word file (staff only: never offered to readers)",
     bucket: "published-files",
     fileRole: "article_docx",
     mimes: [MIME.docx],

@@ -582,8 +582,8 @@ export function ArticleEditor({
             Files
           </h2>
           <p className="text-sm text-ink-muted">
-            The final formatted PDF and Word versions readers download. A missing format simply isn&rsquo;t
-            offered.
+            Readers can read and download the PDF only. A Word file, if you keep one here, stays private to
+            the editorial team so no one can take an editable copy of the article.
           </p>
           <FileSlot
             slot="article_pdf"

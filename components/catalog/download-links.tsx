@@ -4,7 +4,7 @@ import { formatFileSize } from "@/lib/storage";
 interface DownloadOption {
   href: string;
   label: string;
-  format: "PDF" | "Word";
+  format: "PDF";
   sizeBytes?: number | null;
 }
 

@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The project follows
 
 ## [Unreleased]
 
+### PDF only for readers
+
+- Word files are no longer offered on the site, the API or in metadata: readers can read and download
+  the PDF only. Old Word download links answer "This file is not available." Word files can still be
+  attached in the admin, where they are marked staff only.
+
 ### Editable home page
 
 - **Edit this page** on the home page itself (Super Admins, when signed in): click any text, type over

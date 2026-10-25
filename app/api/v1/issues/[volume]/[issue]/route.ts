@@ -17,7 +17,6 @@ export async function GET(request: NextRequest, { params }: RouteContext<"/api/v
         ...issueJson(issue, {
           article_count: issue.articles.length,
           has_pdf: Boolean(issue.fullPdf),
-          has_docx: Boolean(issue.fullDocx),
         }),
         articles: issue.articles.map(articleSummaryJson),
       },

@@ -70,11 +70,6 @@ export function ArticleRow({
             label: "Download PDF",
             format: "PDF",
           },
-          article.hasDocx && {
-            href: articleDownloadPath(article.id, "docx"),
-            label: "Download Word",
-            format: "Word",
-          },
         ]}
       />
     </article>

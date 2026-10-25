@@ -23,10 +23,14 @@ import { recordEvent } from "./metrics";
  * 4.5 MB (scanned back issues are larger); streaming every read through a
  * function costs compute time and bandwidth that the storage CDN serves for
  * free; and the site-wide X-Frame-Options: DENY would stop the inline
- * preview from framing a same-site PDF. Only Word files stay noindex.
+ * preview from framing a same-site PDF.
+ *
+ * Only PDFs are offered. Word files can still be attached in the admin for
+ * the editors' own records, but the public never gets them: an editable copy
+ * of a published article is too easy to alter and pass off as the original.
  */
 
-export type DownloadFormat = "pdf" | "docx";
+export type DownloadFormat = "pdf";
 
 const SIGNED_URL_SECONDS = 60;
 
@@ -41,12 +45,7 @@ const storageUnavailable = () =>
     },
   );
 
-async function redirectToFile(
-  fileId: string,
-  fileName: string,
-  inline: boolean,
-  format: DownloadFormat,
-): Promise<Response> {
+async function redirectToFile(fileId: string, fileName: string, inline: boolean): Promise<Response> {
   const admin = createSupabaseAdminClient();
   const { data: file, error: lookupError } = await admin
     .from("stored_files")
@@ -63,14 +62,14 @@ async function redirectToFile(
     throw storageUnavailable();
   }
   // Only published items reach this point (RLS and the published-issue list).
-  // Their PDFs may be indexed; Word copies are for downloading only.
+  // Their PDFs may be indexed.
   return NextResponse.redirect(data.signedUrl, {
     status: 302,
-    headers: { "Cache-Control": "no-store", ...(format === "pdf" ? {} : { "X-Robots-Tag": "noindex" }) },
+    headers: { "Cache-Control": "no-store" },
   });
 }
 
-/** /api/download/article/[id]?format=pdf|docx[&inline=1] */
+/** /api/download/article/[id]?format=pdf[&inline=1] */
 export async function downloadArticle(
   headers: Headers,
   articleId: string,
@@ -80,11 +79,7 @@ export async function downloadArticle(
   // The public client sees only published articles in published issues (RLS).
   const supabase = createSupabasePublicClient();
   const [{ data: article }, { data: firstAuthor }] = await Promise.all([
-    supabase
-      .from("articles")
-      .select("id, issue_id, pdf_file_id, docx_file_id")
-      .eq("id", articleId)
-      .maybeSingle(),
+    supabase.from("articles").select("id, issue_id, pdf_file_id").eq("id", articleId).maybeSingle(),
     supabase
       .from("public_article_authors")
       .select("full_name")
@@ -94,19 +89,19 @@ export async function downloadArticle(
       .maybeSingle(),
   ]);
   const issue = article && (await getPublishedIssues()).find((i) => i.id === article.issue_id);
-  const fileId = format === "pdf" ? article?.pdf_file_id : article?.docx_file_id;
+  const fileId = article?.pdf_file_id;
   if (!article || !issue || !fileId) throw notFound("This file is not available.");
 
   const family = firstAuthor?.full_name ? fileNamePart(parseName(firstAuthor.full_name).family) : "Article";
   const fileName = `AWLEL_${issueFileStem(issue)}_${family}_${issue.year}.${format}`;
   // Opening the inline preview is reading, not downloading.
   if (!inline) {
-    await recordEvent(headers, format === "pdf" ? "download_pdf" : "download_docx", { articleId });
+    await recordEvent(headers, "download_pdf", { articleId });
   }
-  return redirectToFile(fileId, fileName, inline, format);
+  return redirectToFile(fileId, fileName, inline);
 }
 
-/** /api/download/issue/[id]?format=pdf|docx[&inline=1] */
+/** /api/download/issue/[id]?format=pdf[&inline=1] */
 export async function downloadIssue(
   headers: Headers,
   issueId: string,
@@ -117,15 +112,15 @@ export async function downloadIssue(
   if (!issue) throw notFound("This file is not available.");
   const { data } = await createSupabaseAdminClient()
     .from("issues")
-    .select("full_pdf_file_id, full_docx_file_id")
+    .select("full_pdf_file_id")
     .eq("id", issueId)
     .single();
-  const fileId = format === "pdf" ? data?.full_pdf_file_id : data?.full_docx_file_id;
+  const fileId = data?.full_pdf_file_id;
   if (!fileId) throw notFound("This file is not available.");
 
   // Reading the full issue on the site is not downloading it.
   if (!inline) {
-    await recordEvent(headers, format === "pdf" ? "download_pdf" : "download_docx", { issueId });
+    await recordEvent(headers, "download_pdf", { issueId });
   }
-  return redirectToFile(fileId, `AWLEL_${issueFileStem(issue)}_Full_Issue.${format}`, inline, format);
+  return redirectToFile(fileId, `AWLEL_${issueFileStem(issue)}_Full_Issue.${format}`, inline);
 }

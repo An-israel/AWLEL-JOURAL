@@ -39,10 +39,7 @@ export function preflight() {
   });
 }
 
-export function issueJson(
-  issue: IssueSummary,
-  extra: { article_count?: number; has_pdf?: boolean; has_docx?: boolean } = {},
-) {
+export function issueJson(issue: IssueSummary, extra: { article_count?: number; has_pdf?: boolean } = {}) {
   return {
     id: issue.id,
     volume: issue.volumeNumber,
@@ -60,7 +57,6 @@ export function issueJson(
     ...(extra.has_pdf !== undefined
       ? {
           full_issue_pdf_url: extra.has_pdf ? `${siteUrl}${issueDownloadPath(issue.id, "pdf")}` : null,
-          full_issue_docx_url: extra.has_docx ? `${siteUrl}${issueDownloadPath(issue.id, "docx")}` : null,
         }
       : {}),
   };
@@ -80,7 +76,6 @@ export function articleSummaryJson(a: ArticleSummary) {
     url: `${siteUrl}/articles/${a.slug}`,
     api_url: `${siteUrl}/api/v1/articles/${a.slug}`,
     pdf_url: a.hasPdf ? `${siteUrl}${articleDownloadPath(a.id, "pdf")}` : null,
-    docx_url: a.hasDocx ? `${siteUrl}${articleDownloadPath(a.id, "docx")}` : null,
     views: a.viewCount,
     downloads: a.downloadCount,
   };

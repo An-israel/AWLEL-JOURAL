@@ -10,11 +10,11 @@ export function publicStorageUrl(bucket: "issue-covers" | "site-assets", path: s
  * Download route for a published file. The route checks the item is
  * published, records the download and redirects to a signed URL (section 8).
  */
-export function articleDownloadPath(articleId: string, format: "pdf" | "docx"): string {
+export function articleDownloadPath(articleId: string, format: "pdf"): string {
   return `/api/download/article/${articleId}?format=${format}`;
 }
 
-export function issueDownloadPath(issueId: string, format: "pdf" | "docx"): string {
+export function issueDownloadPath(issueId: string, format: "pdf"): string {
   return `/api/download/issue/${issueId}?format=${format}`;
 }
 

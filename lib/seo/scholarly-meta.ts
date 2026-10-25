@@ -30,7 +30,6 @@ export interface ScholarlyArticleMeta {
   /** Absolute URLs. */
   url: string;
   pdfUrl: string | null;
-  docxUrl: string | null;
   /** The journal's licence from Settings; no rights statement when unset. */
   licence?: Licence | null;
 }

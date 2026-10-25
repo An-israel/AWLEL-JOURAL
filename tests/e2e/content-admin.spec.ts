@@ -228,7 +228,7 @@ test.describe("editor content workflows", () => {
       .click();
     expect((await download).suggestedFilename()).toBe(`AWLEL_Vol${volume}_Issue1_Okafo_2099.pdf`);
     await tab.request.get(`/api/download/article/${articleId}?format=pdf`, { maxRedirects: 0 });
-    // Bots are not counted, and a missing format is a 404 rather than a broken link.
+    // Bots are not counted. Word files are never served, even with one attached.
     const bot = await tab.request.get(`/api/download/article/${articleId}?format=pdf`, {
       maxRedirects: 0,
       headers: { "user-agent": "Googlebot/2.1 (+http://www.google.com/bot.html)" },
@@ -238,6 +238,7 @@ test.describe("editor content workflows", () => {
       maxRedirects: 0,
     });
     expect(missing.status()).toBe(404);
+    await expect(tab.getByRole("link", { name: /Word/ })).toHaveCount(0);
     await tab.reload();
     await expect(tab.getByTestId("article-stats")).toHaveText("1 view1 download");
     await reader.close();

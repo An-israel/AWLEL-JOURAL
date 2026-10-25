@@ -181,7 +181,6 @@ async function ArticleContent({ article }: { article: ArticleDetail }) {
     abstract,
     url,
     pdfUrl,
-    docxUrl: article.hasDocx ? `${siteUrl}${articleDownloadPath(article.id, "docx")}` : null,
     licence,
   };
   const structured = scholarlyArticleLd(
@@ -221,12 +220,6 @@ async function ArticleContent({ article }: { article: ArticleDetail }) {
       label: "Download PDF",
       format: "PDF" as const,
       sizeBytes: article.pdf?.sizeBytes,
-    },
-    article.hasDocx && {
-      href: articleDownloadPath(article.id, "docx"),
-      label: "Download Word",
-      format: "Word" as const,
-      sizeBytes: article.docx?.sizeBytes,
     },
   ];
   const affiliations = [
@@ -414,7 +407,7 @@ async function ArticleContent({ article }: { article: ArticleDetail }) {
                   Read the full article
                 </a>
               ) : null}
-              {article.hasPdf || article.hasDocx ? (
+              {article.hasPdf ? (
                 <DownloadLinks variant="large" options={downloadOptions} secondary={article.hasPdf} />
               ) : (
                 <p className="text-sm text-ink-muted">
