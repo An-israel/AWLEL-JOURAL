@@ -98,7 +98,7 @@ export default async function EditorialBoardPage() {
               </h2>
               <span className="text-sm text-ink-muted">{group.members.length}</span>
             </div>
-            <ul className="mt-2 grid gap-x-10 md:grid-cols-2">
+            <ul className="mt-2">
               {group.members.map((m) => (
                 <li key={m.id} className="flex items-start gap-4 border-b border-line/70 py-5">
                   <Portrait member={m} size="md" />
