@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The project follows
 
 ### Editable home page
 
+- **Edit this page** on the home page itself (Super Admins, when signed in): click any text, type over
+  it and press Save. Links don't open while editing; Admin → Home page still shows or hides sections.
+- The site keeps its real details from Settings even before the setup SQL adds the home page wording.
 - **Admin → Home page** (Super Admins): every text on the home page can be changed, from the title and
   introduction to each heading, link and button, and each section (latest issue, subjects, about, recent
   issues, the "Publish with AWLEL" box) can be hidden. "Restore the original wording" puts everything back.

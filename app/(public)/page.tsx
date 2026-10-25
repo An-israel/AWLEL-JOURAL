@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { ArticleRow } from "@/components/catalog/article-row";
 import { authorLine } from "@/components/catalog/author-names";
 import { IssueCover } from "@/components/catalog/issue-cover";
-import { RichText } from "@/components/catalog/rich-text";
 import { SectionHeading } from "@/components/catalog/section-heading";
 import { JsonLd } from "@/components/seo/json-ld";
+import { EditableRichText, EditableText, HomeEditProvider } from "@/components/site/home-edit";
 import {
   getCategoriesWithCounts,
   getIssueArticles,
@@ -17,6 +18,7 @@ import { getFeatureFlags } from "@/lib/data/feature-flags";
 import { getSiteSettings } from "@/lib/data/site-settings";
 import { siteUrl } from "@/lib/env.public";
 import { plural } from "@/lib/plural";
+import { sanitizeRichText } from "@/lib/sanitize";
 import { periodicalLd } from "@/lib/seo/json-ld";
 
 export const metadata: Metadata = {
@@ -43,11 +45,20 @@ export default async function HomePage() {
   const subjects = categories.filter((c) => c.articleCount > 0);
   // "Open access" is claimed only once the licence is confirmed in Settings (item 41).
   const badges = [`ISSN ${settings.issn}`, settings.licence ? "Open access" : null, "Peer reviewed"];
-  // The wording is edited in Admin → Home page.
+  // The wording is edited in Admin → Home page, or in place with "Edit this page".
   const home = settings.home;
+  const T = (section: keyof typeof home, field: string, label: string, multiline = false) => (
+    <EditableText
+      section={section}
+      field={field}
+      text={(home[section] as Record<string, string | boolean>)[field] as string}
+      label={label}
+      multiline={multiline}
+    />
+  );
 
   return (
-    <>
+    <HomeEditProvider>
       <JsonLd
         data={periodicalLd({
           name: settings.journalName,
@@ -71,31 +82,48 @@ export default async function HomePage() {
         <div className="relative mx-auto grid max-w-site items-center gap-12 px-4 py-14 sm:px-6 sm:py-20 lg:grid-cols-[1.3fr_1fr] lg:px-8 lg:py-24">
           <div className="max-w-2xl">
             <p className="text-sm font-medium tracking-[0.16em] text-coral-ink uppercase">
-              {home.hero.eyebrow || settings.subtitle}
+              <EditableText
+                section="hero"
+                field="eyebrow"
+                text={home.hero.eyebrow || settings.subtitle}
+                label="Line above the title"
+              />
             </p>
             <h1
               id="hero-title"
               className="mt-5 text-4xl leading-[1.08] font-bold tracking-tight sm:text-5xl lg:text-display"
             >
-              {home.hero.title || settings.journalName}
+              <EditableText
+                section="hero"
+                field="title"
+                text={home.hero.title || settings.journalName}
+                label="Title"
+              />
             </h1>
             <hr className="rule-gold mt-8 w-24" />
-            <p className="mt-6 max-w-xl text-lg leading-relaxed text-ink-muted">{home.hero.intro}</p>
+            <p className="mt-6 max-w-xl text-lg leading-relaxed text-ink-muted">
+              {T("hero", "intro", "Introduction", true)}
+            </p>
             <p className="mt-4 text-sm font-medium text-ink-muted">
-              {home.hero.badges || badges.filter(Boolean).join(" · ")}
+              <EditableText
+                section="hero"
+                field="badges"
+                text={home.hero.badges || badges.filter(Boolean).join(" · ")}
+                label="Line under the introduction"
+              />
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
               <Link
                 href={latest?.path ?? "/issues"}
                 className="rounded-md bg-navy px-6 py-3 font-medium text-white no-underline shadow-sm transition-colors hover:bg-royal"
               >
-                {home.hero.readButton}
+                {T("hero", "readButton", "First button")}
               </Link>
               <Link
                 href="/submit"
                 className="rounded-md border border-navy bg-white px-6 py-3 font-medium text-navy no-underline transition-colors hover:bg-navy hover:text-white"
               >
-                {home.hero.submitButton}
+                {T("hero", "submitButton", "Second button")}
               </Link>
             </div>
           </div>
@@ -107,7 +135,7 @@ export default async function HomePage() {
                   <IssueCover issue={latest} priority sizes="(min-width: 1024px) 304px, 256px" />
                 </div>
                 <span className="mx-auto mt-4 block w-max max-w-full rounded-full bg-white px-4 py-2 text-center text-sm font-semibold text-ink shadow-sm">
-                  {home.hero.coverCaption} · {latest.label}
+                  {T("hero", "coverCaption", "Label under the cover")} · {latest.label}
                 </span>
               </Link>
             </div>
@@ -120,9 +148,9 @@ export default async function HomePage() {
         <section className="mx-auto max-w-site px-4 pt-20 sm:px-6 lg:px-8" aria-labelledby="latest-title">
           <SectionHeading
             id="latest-title"
-            eyebrow={home.latest.eyebrow}
+            eyebrow={T("latest", "eyebrow", "Latest issue small heading")}
             title={latest.label}
-            action={{ href: latest.path, label: home.latest.actionLabel }}
+            action={{ href: latest.path, label: T("latest", "actionLabel", "Link to the issue") }}
           />
           {latestArticles.length > 0 ? (
             <div className="mt-6 divide-y divide-line rounded-lg border border-line bg-white px-5 sm:px-8">
@@ -131,7 +159,9 @@ export default async function HomePage() {
               ))}
             </div>
           ) : (
-            <p className="mt-6 text-ink-muted">{home.latest.empty}</p>
+            <p className="mt-6 text-ink-muted">
+              {T("latest", "empty", "Message while the issue has no articles", true)}
+            </p>
           )}
         </section>
       ) : null}
@@ -141,9 +171,9 @@ export default async function HomePage() {
         <section className="mx-auto max-w-site px-4 pt-20 sm:px-6 lg:px-8" aria-labelledby="categories-title">
           <SectionHeading
             id="categories-title"
-            eyebrow={home.subjects.eyebrow}
-            title={home.subjects.title}
-            action={{ href: "/categories", label: home.subjects.actionLabel }}
+            eyebrow={T("subjects", "eyebrow", "Subjects small heading")}
+            title={T("subjects", "title", "Subjects heading")}
+            action={{ href: "/categories", label: T("subjects", "actionLabel", "Link to all subjects") }}
           />
           {/* Separate cards, so a short last row leaves no grey gap. */}
           <ul className="mt-8 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
@@ -170,15 +200,15 @@ export default async function HomePage() {
           </h2>
           <div className={`grid gap-12 ${showDownloads ? "lg:grid-cols-2" : ""}`}>
             <PopularList
-              eyebrow={home.popular.eyebrow}
-              title={home.popular.mostRead}
+              eyebrow={T("popular", "eyebrow", "Most read small heading")}
+              title={T("popular", "mostRead", "Most read heading")}
               articles={mostRead}
               metric="views"
             />
             {showDownloads ? (
               <PopularList
-                eyebrow={home.popular.eyebrow}
-                title={home.popular.mostDownloaded}
+                eyebrow={T("popular", "eyebrow", "Most downloaded small heading")}
+                title={T("popular", "mostDownloaded", "Most downloaded heading")}
                 articles={mostDownloaded}
                 metric="downloads"
               />
@@ -195,10 +225,20 @@ export default async function HomePage() {
           >
             {home.about.show ? (
               <div>
-                <SectionHeading id="about-title" eyebrow={home.about.eyebrow} title={home.about.title} />
-                <RichText html={home.about.body} className="prose-reading mt-6 text-ink-muted" />
+                <SectionHeading
+                  id="about-title"
+                  eyebrow={T("about", "eyebrow", "About small heading")}
+                  title={T("about", "title", "About heading")}
+                />
+                <EditableRichText
+                  section="about"
+                  field="body"
+                  html={sanitizeRichText(home.about.body)}
+                  label="About text"
+                  className="prose-reading mt-6 text-ink-muted"
+                />
                 <Link href="/about" className="mt-5 inline-block font-semibold text-navy hover:text-royal">
-                  {home.about.linkLabel} <span aria-hidden>→</span>
+                  {T("about", "linkLabel", "Link to the About page")} <span aria-hidden>→</span>
                 </Link>
               </div>
             ) : null}
@@ -206,10 +246,10 @@ export default async function HomePage() {
               <div>
                 <div className="flex items-end justify-between">
                   <h3 id={home.about.show ? undefined : "about-title"} className="text-lg font-semibold">
-                    {home.recent.title}
+                    {T("recent", "title", "Recent issues heading")}
                   </h3>
                   <Link href="/issues" className="text-sm font-semibold text-navy hover:text-royal">
-                    {home.recent.linkLabel} <span aria-hidden>→</span>
+                    {T("recent", "linkLabel", "Link to the archive")} <span aria-hidden>→</span>
                   </Link>
                 </div>
                 <ul className="mt-5 grid grid-cols-2 gap-5 sm:grid-cols-4">
@@ -247,31 +287,31 @@ export default async function HomePage() {
             </div>
             <div className="relative max-w-xl">
               <p className="text-xs font-semibold tracking-[0.18em] text-gold-light uppercase">
-                {home.cta.eyebrow}
+                {T("cta", "eyebrow", "Authors box small heading")}
               </p>
               <h2 id="cta-title" className="mt-2 text-3xl text-white">
-                {home.cta.title}
+                {T("cta", "title", "Authors box heading")}
               </h2>
-              <p className="mt-4 text-white/85">{home.cta.body}</p>
+              <p className="mt-4 text-white/85">{T("cta", "body", "Authors box text", true)}</p>
               <div className="mt-7 flex flex-wrap gap-3">
                 <Link
                   href="/submit"
                   className="rounded-md bg-white px-5 py-3 font-medium text-navy no-underline hover:bg-gold-light"
                 >
-                  {home.cta.submitButton}
+                  {T("cta", "submitButton", "Authors box first button")}
                 </Link>
                 <Link
                   href="/submission-guidelines"
                   className="rounded-md border border-white/60 px-5 py-3 font-medium text-white no-underline hover:border-white hover:bg-white/10"
                 >
-                  {home.cta.guidelinesButton}
+                  {T("cta", "guidelinesButton", "Authors box second button")}
                 </Link>
               </div>
             </div>
           </div>
         </section>
       ) : null}
-    </>
+    </HomeEditProvider>
   );
 }
 
@@ -281,8 +321,8 @@ function PopularList({
   articles,
   metric,
 }: {
-  eyebrow: string;
-  title: string;
+  eyebrow: ReactNode;
+  title: ReactNode;
   articles: ArticleSummary[];
   metric: "views" | "downloads";
 }) {

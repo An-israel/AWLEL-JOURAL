@@ -8,9 +8,9 @@ export function SectionHeading({
   action,
 }: {
   id?: string;
-  eyebrow?: string;
+  eyebrow?: ReactNode;
   title: ReactNode;
-  action?: { href: string; label: string };
+  action?: { href: string; label: ReactNode };
 }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">

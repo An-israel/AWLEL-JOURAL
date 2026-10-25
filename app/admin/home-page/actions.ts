@@ -5,7 +5,7 @@ import { z } from "zod";
 import { userWithRole } from "@/lib/auth";
 import { fromDbError, forbiddenResult, invalid, type ActionResult } from "@/lib/admin/result";
 import { TAGS } from "@/lib/data/tags";
-import { homeContentSchema } from "@/lib/home-content";
+import { homeContentSchema, withHomeDefaults, type HomeContent } from "@/lib/home-content";
 import { sanitizeRichText } from "@/lib/sanitize";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -38,4 +38,21 @@ export async function saveHomeContent(
     message: "Home page saved. It shows the new wording straight away.",
     data: { version: data.version },
   };
+}
+
+/**
+ * What the home page's "Edit this page" mode starts from: the stored wording
+ * and its version, for Super Admins only (null for everyone else).
+ */
+export async function loadHomeForEditing(): Promise<{ version: number; content: HomeContent } | null> {
+  const user = await userWithRole(["super_admin"]);
+  if (!user) return null;
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("site_settings")
+    .select("version, home_content")
+    .eq("id", 1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return { version: data.version, content: withHomeDefaults(data.home_content) };
 }

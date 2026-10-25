@@ -38,13 +38,21 @@ export async function getSiteSettings(): Promise<SiteSettings> {
   "use cache";
   cacheTag(TAGS.siteSettings);
 
-  const { data, error } = await createSupabasePublicClient()
+  const supabase = createSupabasePublicClient();
+  const base =
+    "journal_name, journal_short_name, subtitle, issn, publisher, contact_email, postal_address, license_name, license_url, social_links, logo:stored_files!site_settings_logo_file_id_fkey(path), og:stored_files!site_settings_default_og_image_file_id_fkey(path)" as const;
+  let { data, error } = await supabase
     .from("site_settings")
-    .select(
-      "journal_name, journal_short_name, subtitle, issn, publisher, contact_email, postal_address, license_name, license_url, social_links, home_content, logo:stored_files!site_settings_logo_file_id_fkey(path), og:stored_files!site_settings_default_og_image_file_id_fkey(path)",
-    )
+    .select(`${base}, home_content`)
     .eq("id", 1)
     .maybeSingle();
+  // Before the setup SQL has added home_content (migration 19), keep the
+  // real details and use the original home page wording.
+  if (error?.code === "42703") {
+    const older = await supabase.from("site_settings").select(base).eq("id", 1).maybeSingle();
+    ({ error } = older);
+    data = older.data ? { ...older.data, home_content: {} } : null;
+  }
 
   if (error || !data) {
     // Serve the built-in details rather than failing the page (item 95).

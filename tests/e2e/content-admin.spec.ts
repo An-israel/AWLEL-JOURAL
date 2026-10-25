@@ -447,6 +447,42 @@ test.describe("Super Admin content", () => {
     await expect(page.getByRole("heading", { name: "Publish with AWLEL" })).toBeVisible();
   });
 
+  test("the home page can be edited in place", async ({ page, browser }) => {
+    const intro = `Typed straight onto the home page ${Date.now()}.`;
+    await page.goto("/");
+    await page.getByRole("button", { name: "Edit this page" }).click();
+    const box = page.getByRole("textbox", { name: "Introduction", exact: true });
+    await box.click();
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type(intro);
+    // Clicking a button's text edits it rather than following the link.
+    const button = page.getByRole("textbox", { name: "First button", exact: true });
+    await button.click();
+    await expect(page).toHaveURL(/\/$/);
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("Open the newest issue");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText("Saved. Everyone now sees the new wording.")).toBeVisible();
+
+    await page.goto("/");
+    await expect(page.getByText(intro)).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open the newest issue" })).toBeVisible();
+
+    // Signed-out visitors never see the button.
+    const context = await browser.newContext();
+    const visitor = await context.newPage();
+    await visitor.goto("/");
+    await expect(visitor.getByText(intro)).toBeVisible();
+    await expect(visitor.getByRole("button", { name: "Edit this page" })).toHaveCount(0);
+    await context.close();
+
+    await page.goto("/admin/home-page");
+    await page.getByRole("button", { name: "Restore the original wording" }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Restore" }).click();
+    await page.getByRole("button", { name: "Save and publish" }).click();
+    await expect(page.getByText("Home page saved.", { exact: false })).toBeVisible();
+  });
+
   test("editing a static page updates the public page", async ({ page }) => {
     const marker = `Edited by the end-to-end test ${Date.now()}.`;
     await page.goto("/admin/pages/privacy");
