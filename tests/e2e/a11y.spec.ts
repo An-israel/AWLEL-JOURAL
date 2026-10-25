@@ -69,6 +69,7 @@ test.describe("admin pages", () => {
       "/admin/messages",
       "/admin/users",
       "/admin/settings",
+      "/admin/home-page",
       "/admin/audit-log",
       "/admin/operations",
       "/admin/profile",

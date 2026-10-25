@@ -21,6 +21,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   { href: "/admin/categories", label: "Categories", icon: "tags", roles: STAFF },
   { href: "/admin/submissions", label: "Submissions", icon: "inbox", roles: STAFF },
   { href: "/admin/reviews", label: "Reviews", icon: "clipboard-check", roles: ALL },
+  { href: "/admin/home-page", label: "Home page", icon: "house", roles: SUPER },
   { href: "/admin/pages", label: "Pages", icon: "panels-top-left", roles: SUPER },
   {
     href: "/admin/editorial-board",

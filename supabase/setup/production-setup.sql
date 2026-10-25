@@ -24,7 +24,7 @@ create table if not exists supabase_migrations.schema_migrations (version text p
 do $awlel_check$
 begin
   if to_regclass('public.issues') is not null
-     and not exists (select 1 from supabase_migrations.schema_migrations where version in ('20261017000001','20261017000002','20261017000003','20261017000004','20261017000005','20261017000006','20261017000007','20261017000008','20261017000009','20261017000010','20261017000011','20261017000012','20261018000013','20261018000014','20261018000015','20261018000016','20261018000017','20261024000018')) then
+     and not exists (select 1 from supabase_migrations.schema_migrations where version in ('20261017000001','20261017000002','20261017000003','20261017000004','20261017000005','20261017000006','20261017000007','20261017000008','20261017000009','20261017000010','20261017000011','20261017000012','20261018000013','20261018000014','20261018000015','20261018000016','20261018000017','20261024000018','20261025000019')) then
     raise exception 'This database has AWLEL tables but no record of how they were created, so updating it automatically is not safe. Nothing was changed. Ask the developer for help.';
   end if;
 end
@@ -4070,6 +4070,31 @@ $awlel_migration$;
 end
 $awlel_wrap$;
 
+-- >>> migration 20261025000019_home_content
+do $awlel_wrap$
+begin
+  if not exists (select 1 from supabase_migrations.schema_migrations where version = '20261025000019') then
+    execute $awlel_migration$
+-- =============================================================================
+-- The home page's wording, edited in Admin → Home page (lib/home-content.ts).
+-- Empty until someone saves: the site then shows the original wording. The
+-- existing site_settings policies apply (everyone reads, Super Admins write)
+-- and the audit trigger records each change.
+-- Reversal: supabase/rollbacks/20261025000019_home_content.down.sql
+-- =============================================================================
+alter table public.site_settings
+  add column if not exists home_content jsonb not null default '{}'::jsonb;
+
+alter table public.site_settings drop constraint if exists site_settings_home_content_check;
+alter table public.site_settings add constraint site_settings_home_content_check
+  check (jsonb_typeof(home_content) = 'object' and pg_column_size(home_content) < 65536);
+$awlel_migration$;
+    insert into supabase_migrations.schema_migrations (version, name) values ('20261025000019', 'home_content');
+    raise notice 'Applied update 20261025000019 (home_content)';
+  end if;
+end
+$awlel_wrap$;
+
 -- >>> starting content (seed.sql), only for a site that has none yet
 do $awlel_wrap$
 begin
@@ -4337,8 +4362,8 @@ commit;
 
 -- >>> status
 select 'Database updates applied' as item,
-       (select count(*) from supabase_migrations.schema_migrations where version in ('20261017000001','20261017000002','20261017000003','20261017000004','20261017000005','20261017000006','20261017000007','20261017000008','20261017000009','20261017000010','20261017000011','20261017000012','20261018000013','20261018000014','20261018000015','20261018000016','20261018000017','20261024000018'))::text
-         || ' of 18' as status
+       (select count(*) from supabase_migrations.schema_migrations where version in ('20261017000001','20261017000002','20261017000003','20261017000004','20261017000005','20261017000006','20261017000007','20261017000008','20261017000009','20261017000010','20261017000011','20261017000012','20261018000013','20261018000014','20261018000015','20261018000016','20261018000017','20261024000018','20261025000019'))::text
+         || ' of 19' as status
 union all select 'Subject categories', (select count(*) from public.categories)::text
 union all select 'Static pages', (select count(*) from public.pages)::text
 union all select 'Published issues', (select count(*) from public.issues where status = 'published')::text

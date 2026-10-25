@@ -1213,6 +1213,7 @@ export type Database = {
         Row: {
           contact_email: string;
           default_og_image_file_id: string | null;
+          home_content: NonNullable<Json>;
           id: number;
           issn: string;
           journal_name: string;
@@ -1233,6 +1234,7 @@ export type Database = {
         Insert: {
           contact_email: string;
           default_og_image_file_id?: string | null;
+          home_content?: NonNullable<Json>;
           id?: number;
           issn: string;
           journal_name: string;
@@ -1252,6 +1254,7 @@ export type Database = {
         Update: {
           contact_email?: string;
           default_og_image_file_id?: string | null;
+          home_content?: NonNullable<Json>;
           id?: number;
           issn?: string;
           journal_name?: string;

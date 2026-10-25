@@ -58,6 +58,7 @@ const FIELDS: Record<string, string> = {
   group_id: "Board group",
   needs_verification: "Needs checking",
   journal_name: "Journal name",
+  home_content: "Home page wording",
   journal_short_name: "Short name",
   subtitle: "Subtitle",
   issn: "ISSN",

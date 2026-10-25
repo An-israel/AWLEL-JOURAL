@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The project follows
 
 ## [Unreleased]
 
+### Editable home page
+
+- **Admin → Home page** (Super Admins): every text on the home page can be changed, from the title and
+  introduction to each heading, link and button, and each section (latest issue, subjects, about, recent
+  issues, the "Publish with AWLEL" box) can be hidden. "Restore the original wording" puts everything back.
+  Changes go live on saving and appear in the Audit Log. Stored in `site_settings.home_content` (database
+  update 19); anything not set keeps the original wording.
+
 ### Reading on the site, two ways to submit, issue numbers everywhere
 
 - **Read online:** articles and full issues open in a reader on the page (PDF.js), showing the uploaded PDF

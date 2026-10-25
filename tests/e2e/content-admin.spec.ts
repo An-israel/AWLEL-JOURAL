@@ -421,6 +421,32 @@ test.describe("Super Admin content", () => {
     await expect(page.getByText("Volume deleted.")).toBeVisible();
   });
 
+  test("the home page's wording can be edited and sections hidden", async ({ page }) => {
+    const intro = `An introduction written by the end-to-end test ${Date.now()}.`;
+    await page.goto("/admin/home-page");
+    await page.getByLabel("Introduction", { exact: true }).fill(intro);
+    await page.getByLabel("First button (opens the latest issue)").fill("Open the newest issue");
+    const cta = page.getByRole("region", { name: "Publish with AWLEL box" });
+    await cta.getByLabel("Show this section on the home page").uncheck();
+    await page.getByRole("button", { name: "Save and publish" }).click();
+    await expect(page.getByText("Home page saved.", { exact: false })).toBeVisible();
+
+    await page.goto("/");
+    await expect(page.getByText(intro)).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open the newest issue" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Publish with AWLEL" })).toHaveCount(0);
+
+    // Back to the original wording, with every section shown.
+    await page.goto("/admin/home-page");
+    await page.getByRole("button", { name: "Restore the original wording" }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Restore" }).click();
+    await page.getByRole("button", { name: "Save and publish" }).click();
+    await expect(page.getByText("Home page saved.", { exact: false })).toBeVisible();
+    await page.goto("/");
+    await expect(page.getByRole("link", { name: "Read the latest issue" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Publish with AWLEL" })).toBeVisible();
+  });
+
   test("editing a static page updates the public page", async ({ page }) => {
     const marker = `Edited by the end-to-end test ${Date.now()}.`;
     await page.goto("/admin/pages/privacy");
