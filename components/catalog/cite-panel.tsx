@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Copy, FileDown } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { useId, useRef, useState, type ClipboardEvent } from "react";
 import type { FormattedCitation } from "@/lib/citations";
 
 type Tab = "apa" | "mla" | "bibtex";
@@ -21,6 +21,30 @@ async function copyRich(plain: string, html?: string) {
     return;
   }
   await navigator.clipboard.writeText(plain);
+}
+
+const escapeHtml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** The selected text as bare HTML: words and italics only, none of the page's styling. */
+function bareHtml(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) return escapeHtml(node.textContent ?? "");
+  const inner = Array.from(node.childNodes).map(bareHtml).join("");
+  return node.nodeName === "I" || node.nodeName === "EM" ? `<i>${inner}</i>` : inner;
+}
+
+/**
+ * Copying a citation by selecting it: the browser would otherwise copy the
+ * page's styling too (background, borders, the button row below), which
+ * Word turns into a box or table. Keep just the words and the italics.
+ */
+function copySelection(e: ClipboardEvent) {
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
+  const plain = selection.toString().trim();
+  if (!plain) return;
+  e.preventDefault();
+  e.clipboardData.setData("text/plain", plain);
+  e.clipboardData.setData("text/html", bareHtml(selection.getRangeAt(0).cloneContents()).trim());
 }
 
 export function CitePanel({
@@ -113,7 +137,13 @@ export function CitePanel({
           </button>
         ))}
       </div>
-      <div id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-tab-${tab}`} className="p-5">
+      <div
+        id={`${id}-panel`}
+        role="tabpanel"
+        aria-labelledby={`${id}-tab-${tab}`}
+        className="p-5"
+        onCopy={copySelection}
+      >
         {current ? (
           <p className="font-serif text-[0.98rem] leading-relaxed break-words">
             {current.segments.map((s, i) =>
